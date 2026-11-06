@@ -1,0 +1,43 @@
+# Visual Studio Code。路径来自 Homebrew cask `visual-studio-code` 的 zap 段，并在本机核对过。
+bundle_id = "com.microsoft.VSCode"
+name = "Visual Studio Code"
+aliases = ["VS Code", "Code"]
+
+[[paths]]
+path = "~/.vscode"
+confidence = "likely"
+note = "扩展与命令行工具；Insiders 版和远程开发也会用到"
+
+[[paths]]
+path = "~/Library/Application Support/Code"
+confidence = "certain"
+note = "用户设置、工作区状态与扩展数据"
+
+[[paths]]
+path = "~/Library/Caches/com.microsoft.VSCode"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Caches/com.microsoft.VSCode.ShipIt"
+confidence = "certain"
+note = "自动更新的下载"
+
+[[paths]]
+path = "~/Library/HTTPStorages/com.microsoft.VSCode"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.microsoft.VSCode.plist"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.microsoft.VSCode.helper.plist"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/ByHost/com.microsoft.VSCode.ShipIt.*.plist"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Saved Application State/com.microsoft.VSCode.savedState"
+confidence = "certain"

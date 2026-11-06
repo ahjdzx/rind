@@ -1,0 +1,17 @@
+[package]
+name = "rind-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "rind-app"
+path = "src/main.rs"
+
+[dependencies]
+rind-core.workspace = true
+rind-i18n.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+futures = "0.3"
+gpui-kit = "=0.9.0"

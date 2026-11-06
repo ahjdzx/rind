@@ -1,0 +1,58 @@
+# 钉钉（DingTalk）。路径来自 Homebrew cask `dingtalk` 的 zap 段。
+bundle_id = "com.alibaba.DingTalkMac"
+name = "钉钉"
+aliases = ["DingTalk"]
+
+[[paths]]
+path = "~/Library/Application Support/DingTalkMac"
+confidence = "certain"
+note = "聊天记录与缓存"
+
+[[paths]]
+path = "~/Library/Caches/com.alibaba.DingTalkMac"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Caches/DingTalk"
+confidence = "likely"
+
+[[paths]]
+path = "~/Library/Caches/com.alibaba.DingTalkInstaller"
+confidence = "likely"
+note = "安装器的缓存"
+
+[[paths]]
+path = "~/Library/Containers/com.alibaba.DingTalkMac.DTFinderSyncExt"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Containers/com.alibaba.DingTalkMac.DTShareExtension"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Application Scripts/com.alibaba.DingTalkMac.*"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.alibaba.DingTalkMac.plist"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.alibaba.DingTalk-Helper.plist"
+confidence = "likely"
+
+[[paths]]
+path = "~/Library/Preferences/com.alibaba.DingTalkInstaller.plist"
+confidence = "likely"
+
+[[paths]]
+path = "~/Library/Preferences/com.dingtalk.mac.plist"
+confidence = "likely"
+
+[[paths]]
+path = "~/Library/Saved Application State/com.alibaba.DingTalkMac.savedState"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/WebKit/com.alibaba.DingTalkMac"
+confidence = "certain"

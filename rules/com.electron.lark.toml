@@ -1,0 +1,37 @@
+# 飞书（Feishu / Lark）。路径来自 Homebrew cask `feishu` 的 zap 段。
+bundle_id = "com.electron.lark"
+name = "飞书"
+aliases = ["Feishu", "Lark"]
+
+[[paths]]
+path = "~/Library/Application Support/com.electron.lark.font_workaround"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Caches/com.electron.lark"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Caches/com.electron.lark.helper"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Caches/com.bytedance.lark.helper"
+confidence = "likely"
+note = "飞书的更新 helper"
+
+[[paths]]
+path = "~/Library/HTTPStorages/com.electron.lark.helper"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.electron.lark.plist"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.bytedance.lark.helper.plist"
+confidence = "likely"
+
+[[paths]]
+path = "~/Library/Saved Application State/com.electron.lark.savedState"
+confidence = "certain"

@@ -1,0 +1,47 @@
+# QQ。路径来自 Homebrew cask `qq` 的 zap 段。
+bundle_id = "com.tencent.qq"
+name = "QQ"
+
+[[paths]]
+path = "~/Library/Containers/com.tencent.qq"
+confidence = "certain"
+note = "沙盒容器，含聊天记录"
+
+[[paths]]
+path = "~/Library/Containers/com.tencent.qq.share"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Containers/*.com.tencent.localserver2"
+confidence = "likely"
+note = "QQ 的本地服务 helper；同一团队的其它 App 也可能用"
+
+[[paths]]
+path = "~/Library/Containers/*.com.tencent.ScreenCapture2"
+confidence = "likely"
+note = "QQ 的截图 helper"
+
+[[paths]]
+path = "~/Library/Group Containers/*.com.tencent"
+confidence = "likely"
+note = "腾讯多款 App 共用的 App Group"
+
+[[paths]]
+path = "~/Library/Application Scripts/com.tencent.qq"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Caches/com.tencent.qq"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.tencent.qq.plist"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Saved Application State/com.tencent.qq.savedState"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/WebKit/com.tencent.qq"
+confidence = "certain"

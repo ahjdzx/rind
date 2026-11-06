@@ -1,0 +1,37 @@
+# 网易云音乐（NetEase Cloud Music）。路径来自 Homebrew cask `neteasemusic` 的 zap 段。
+bundle_id = "com.netease.163music"
+name = "网易云音乐"
+aliases = ["NeteaseMusic", "NetEase Cloud Music"]
+
+[[paths]]
+path = "~/Library/Application Support/com.netease.163music"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Caches/com.netease.163music"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Containers/com.netease.163music"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/HTTPStorages/com.netease.163music"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.netease.163music.plist"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.netease.music.crash.plist"
+confidence = "likely"
+note = "崩溃报告的设置"
+
+[[paths]]
+path = "~/Library/Saved Application State/com.netease.163music.savedState"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/WebKit/com.netease.163music"
+confidence = "certain"

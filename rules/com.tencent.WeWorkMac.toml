@@ -1,0 +1,47 @@
+# 企业微信（WeCom）。路径在本机核对过。
+bundle_id = "com.tencent.WeWorkMac"
+name = "企业微信"
+aliases = ["WeCom", "WeWork"]
+
+[[paths]]
+path = "~/Library/Containers/com.tencent.WeWorkMac"
+confidence = "certain"
+note = "沙盒容器，含聊天记录与缓存"
+
+[[paths]]
+path = "~/Library/Containers/com.tencent.WeWorkMac.MiniProgram"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Containers/*.com.tencent.WeWorkMac.IPCHelper"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Containers/com.tencent.WeWork-Helper"
+confidence = "likely"
+note = "企业微信的 helper"
+
+[[paths]]
+path = "~/Library/Containers/com.tencent.wwmapp"
+confidence = "likely"
+note = "企业微信小程序"
+
+[[paths]]
+path = "~/Library/Group Containers/*.com.tencent.WeWorkMac"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Application Scripts/*.com.tencent.WeWorkMac*"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Caches/com.tencent.WeWorkMac"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.tencent.WeWorkMac.plist"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Saved Application State/com.tencent.WeWorkMac.savedState"
+confidence = "certain"

@@ -1,0 +1,58 @@
+# 腾讯会议（Tencent Meeting / VooV）。路径来自 Homebrew cask `tencent-meeting` 的 zap 段，并在本机核对过。
+bundle_id = "com.tencent.meeting"
+name = "腾讯会议"
+aliases = ["TencentMeeting", "Tencent Meeting", "wemeet"]
+
+[[paths]]
+path = "~/Library/Containers/com.tencent.meeting"
+confidence = "certain"
+note = "沙盒容器"
+
+[[paths]]
+path = "~/Library/Containers/com.tencent.meeting.*"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Containers/com.tencent.wemeet.FileDelta"
+confidence = "likely"
+
+[[paths]]
+path = "~/Library/Application Support/com.tencent.meeting*"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Caches/com.tencent.meeting*"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/com.tencent.meeting"
+confidence = "likely"
+note = "直接放在 Library 下的日志与缓存"
+
+[[paths]]
+path = "~/Library/Group Containers/*.com.tencent.meeting"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Application Scripts/*.com.tencent.meeting"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Application Scripts/com.tencent.meeting"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/HTTPStorages/com.tencent.meeting*"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.tencent.meeting*.plist"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Saved Application State/com.tencent.meeting.savedState"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/WebKit/com.tencent.meeting"
+confidence = "certain"

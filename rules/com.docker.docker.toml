@@ -1,0 +1,54 @@
+# Docker Desktop。路径来自 Homebrew cask `docker-desktop` 的 zap 段，并在本机核对过。
+bundle_id = "com.docker.docker"
+name = "Docker Desktop"
+aliases = ["Docker"]
+
+[[paths]]
+path = "~/.docker"
+confidence = "possible"
+note = "命令行配置、登录凭据与 context；docker CLI 单独安装时也会用"
+
+[[paths]]
+path = "~/Library/Application Support/Docker Desktop"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Application Support/docker-secrets-engine"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Caches/com.docker.docker"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Caches/Docker Desktop"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Caches/docker-secrets-engine"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Containers/com.docker.docker"
+confidence = "certain"
+note = "虚拟机磁盘在这里，可能有几十 GB"
+
+[[paths]]
+path = "~/Library/Group Containers/group.com.docker"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Application Scripts/com.docker.helper"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Application Scripts/group.com.docker"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.docker.docker.plist"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.electron.dockerdesktop.plist"
+confidence = "certain"

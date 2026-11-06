@@ -1,0 +1,35 @@
+# IntelliJ IDEA Ultimate。路径来自 Homebrew cask `intellij-idea` 的 zap 段，并在本机核对过。
+# 其它 JetBrains IDE 各有自己的 IntelliJIdea* / PyCharm* 目录，这里只点名 IDEA 的。
+bundle_id = "com.jetbrains.intellij"
+name = "IntelliJ IDEA"
+aliases = ["IntelliJ IDEA Ultimate", "IntelliJIdea"]
+
+[[paths]]
+path = "~/Library/Application Support/JetBrains/IntelliJIdea*"
+confidence = "certain"
+note = "插件、设置与索引"
+
+[[paths]]
+path = "~/Library/Caches/JetBrains/IntelliJIdea*"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Logs/JetBrains/IntelliJIdea*"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.jetbrains.intellij.plist"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/IntelliJIdea*"
+confidence = "likely"
+
+[[paths]]
+path = "~/Library/Preferences/jetbrains.iu.*.plist"
+confidence = "likely"
+note = "iu = IntelliJ Ultimate 的按版本设置"
+
+[[paths]]
+path = "~/Library/Saved Application State/com.jetbrains.intellij.savedState"
+confidence = "certain"

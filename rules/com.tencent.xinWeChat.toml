@@ -1,0 +1,59 @@
+# 微信（WeChat for Mac）。路径来自 Homebrew cask `wechat` 的 zap 段，并在本机核对过。
+bundle_id = "com.tencent.xinWeChat"
+name = "微信"
+aliases = ["WeChat"]
+
+[[paths]]
+path = "~/Library/Containers/com.tencent.xinWeChat"
+confidence = "certain"
+note = "沙盒容器，含聊天记录与缓存"
+
+[[paths]]
+path = "~/Library/Containers/com.tencent.xinWeChat.MiniProgram"
+confidence = "certain"
+note = "小程序"
+
+[[paths]]
+path = "~/Library/Containers/com.tencent.xinWeChat.WeChatFileProviderExtension"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Containers/com.tencent.xinWeChat.WeChatMacShare"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Containers/*.com.tencent.xinWeChat.IPCHelper"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Group Containers/*.com.tencent.xinWeChat"
+confidence = "certain"
+note = "App Group，含登录信息与文件缓存"
+
+[[paths]]
+path = "~/Library/Application Scripts/*.com.tencent.xinWeChat*"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Application Scripts/com.tencent.xinWeChat*"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Caches/com.tencent.xinWeChat"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.tencent.xinWeChat.plist"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Saved Application State/com.tencent.xinWeChat.savedState"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/HTTPStorages/com.tencent.xinWeChat"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/WebKit/com.tencent.xinWeChat"
+confidence = "certain"

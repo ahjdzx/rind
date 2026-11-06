@@ -1,0 +1,46 @@
+# 百度网盘（Baidu NetDisk）。路径来自 Homebrew cask `baidunetdisk` 的 zap 段，并在本机核对过。
+bundle_id = "com.baidu.BaiduNetdisk-mac"
+name = "百度网盘"
+aliases = ["BaiduNetdisk", "BaiduNetdisk_mac", "Baidu NetDisk"]
+
+[[paths]]
+path = "~/Library/Application Support/baidunetdisk"
+confidence = "likely"
+note = "下载记录与缓存；名字太普通，所以只算 likely"
+
+[[paths]]
+path = "~/Library/Application Support/com.baidu.BaiduNetdisk-mac"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Caches/com.baidu.BaiduNetdisk-mac"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Containers/com.baidu.BaiduNetdisk-mac.FinderSync"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Group Containers/group.com.baidu.BaiduNetdisk-Mac"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Application Scripts/com.baidu.BaiduNetdisk-mac.FinderSync"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Application Scripts/group.com.baidu.BaiduNetdisk-Mac"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/HTTPStorages/com.baidu.BaiduNetdisk-mac"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.baidu.BaiduNetdisk-mac.plist"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/sapi/wappass.baidu.com"
+confidence = "likely"
+note = "百度账号登录组件的数据，其它百度 App 也可能用"
