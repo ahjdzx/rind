@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 安全问题（能绕过保护区、移动不该移动的东西）
+    url: https://github.com/ahjdzx/rind/security/advisories/new
+    about: 请私下上报，不要开公开 issue
+  - name: 使用问题
+    url: https://github.com/ahjdzx/rind/blob/master/docs/USAGE.md
+    about: 先看使用手册，尤其是第 9 节「常见问题」
+  - name: 想参与开发
+    url: https://github.com/ahjdzx/rind/blob/master/CONTRIBUTING.md
+    about: 开发环境、提交前检查、不可破坏的不变量

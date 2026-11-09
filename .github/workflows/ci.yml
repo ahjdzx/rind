@@ -1,0 +1,43 @@
+# 源码检查：格式、Clippy、单元与集成测试。
+# 界面（rind-app）不在这里构建——它要编译整棵 GPU 依赖树，慢且吃资源，改界面请在本地跑
+#   cargo clippy -p rind-app --all-targets -- -D warnings
+# 并手动打开看一眼。
+#
+# 注意：core 的测试会在 runner 自己的家目录里做真实的「移进废纸篓 / 放回」，
+# runner 是一次性的，不会影响任何人的机器。
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: 格式
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --exclude rind-app --all-targets -- -D warnings
+
+      - name: 测试
+        run: cargo test --workspace --exclude rind-app
+        env:
+          RUST_BACKTRACE: 1

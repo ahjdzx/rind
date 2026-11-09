@@ -6,7 +6,7 @@ members = ["crates/rind-core", "crates/rind-i18n", "crates/rind-cli", "crates/ri
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/zhangxin/rind"
+repository = "https://github.com/ahjdzx/rind"
 rust-version = "1.85"
 
 [workspace.dependencies]

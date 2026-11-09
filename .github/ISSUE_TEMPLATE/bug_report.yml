@@ -1,0 +1,64 @@
+name: Bug 报告
+description: 行为不对、界面出错、或者它动了不该动的东西
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **安全相关的问题请不要在这里写**：能绕过保护区、把不该动的移走、History 放错位置——
+        请按 [SECURITY.md](https://github.com/ahjdzx/rind/blob/master/SECURITY.md) 私下上报。
+
+  - type: input
+    id: version
+    attributes:
+      label: Rind 的版本
+      description: 命令行的 `rind --version`；界面用户填构建时的提交（`git -C <仓库> rev-parse --short HEAD`）
+    validations:
+      required: true
+
+  - type: input
+    id: system
+    attributes:
+      label: 系统与芯片
+      placeholder: macOS 26.0，Apple Silicon
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: 在哪出的问题
+      options:
+        - 命令行 rind
+        - 桌面应用
+        - 两者都有
+        - 不确定
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 越具体越好——用的哪条命令 / 点的哪个按钮、之前做过什么
+      placeholder: |
+        1. `rind uninstall 微信 --dry-run`
+        2. 看到 ...
+        3. 期望 ...，实际 ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: 相关输出
+      description: 命令的原始输出（有 `--json` 就给 JSON）。涉及隐私的路径可以改名，但请保留结构和后缀。
+      render: text
+
+  - type: checkboxes
+    id: dry_run
+    attributes:
+      label: 在这之前
+      options:
+        - label: 我能用 `--dry-run` / 只读命令重现它（或说明为什么不能）

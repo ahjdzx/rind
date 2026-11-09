@@ -1,0 +1,34 @@
+name: 功能建议
+description: 想让它多做一件事，或者现在的做法不对
+title: "[建议] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决什么问题
+      description: 先说场景，再说功能——「我每次都要手动 X」比「加一个 Y 按钮」有用得多
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你希望它怎么做
+
+  - type: dropdown
+    id: touches
+    attributes:
+      label: 这个建议会不会涉及移动 / 删除文件
+      options:
+        - 不涉及，只是展示或提示
+        - 会移动文件
+        - 不确定
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        会移动文件的建议，请顺带说明：**拿不准的时候它应该拒绝，还是列出来让你自己选？**
+        Rind 的默认是前者（见 `docs/DESIGN.md` 的「保守默认」），如果你觉得应该反过来，请说明理由。
