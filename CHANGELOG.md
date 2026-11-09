@@ -3,7 +3,7 @@
 本文件记录 Rind 每个版本的改动，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [未发布]
+## [0.2.0] - 2026-11-09
 
 ### 新增
 
@@ -13,10 +13,22 @@
 - 语言选择会记住：设置页选中 / 英后落盘（`<data-dir>/language`），下次启动沿用；
   `RIND_LANG` 显式指定时优先级更高。
 
-### 计划中
+### 打包与安装
 
-见 [docs/ROADMAP.md](docs/ROADMAP.md)。当前候选：`.dmg` 打包与签名公证、Homebrew cask、
-首次运行的「完全磁盘访问」引导、规则库扩充。
+- 每个 tag（`v*`）由 GitHub Actions 构建并把 `Rind-v<版本>.dmg` 挂到 Release
+  （`.github/workflows/release.yml`，手动触发时只出构建产物）；本地打包用 `scripts/package-dmg.sh`。
+- DMG 里是 `Rind.app` 与 `/Applications` 快捷方式，ad-hoc 签名；没有 Developer ID 与公证，
+  第一次打开需要右键 →「打开」。目前只有 Apple Silicon（arm64）产物。
+
+### 文档
+
+- 新增英文 README（[README.en.md](README.en.md)），中英文互相链接。
+- 新增界面截图与动图预览（`docs/images/`），README 顶部有预览区。
+
+## 计划中
+
+见 [docs/ROADMAP.md](docs/ROADMAP.md)。当前候选：Developer ID 签名与公证、Homebrew cask、
+universal（arm64 + Intel）构建、首次运行的「完全磁盘访问」引导、规则库扩充。
 
 ## [0.1.0] - 2026-11-09
 

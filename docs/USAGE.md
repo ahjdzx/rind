@@ -11,7 +11,12 @@
 
 ## 2. 安装
 
-目前**没有预编译产物**，也没有 Homebrew / cask，只有一个办法：自己构建。
+**下载 DMG（推荐）**：到 [Releases](https://github.com/ahjdzx/rind/releases) 下载最新的
+`Rind-v*.dmg`，把 Rind 拖进「应用程序」就行。DMG 由 GitHub Actions 在 Apple Silicon 上构建
+（arm64），**没有 Developer ID 签名与公证**——第一次打开需要右键 →「打开」，之后就正常了。
+要求 macOS 14+。
+
+**从源码构建**：
 
 ```sh
 git clone git@github.com:ahjdzx/rind.git
@@ -21,8 +26,8 @@ cargo build --release -p rind-cli      # 命令行，产物在 target/release/ri
 cargo build --release -p rind-app      # 桌面应用，产物在 target/release/rind-app
 ```
 
-想让它出现在「应用程序」里，把 `rind-app` 拷进 `Rind.app/Contents/MacOS/` 也行，但仓库里没有做打包脚本，
-也没有签名与公证，第一次打开可能需要右键 →「打开」。这两个都在 [ROADMAP](ROADMAP.md) 里。
+想自己打包 DMG：`scripts/package-dmg.sh`，产物在 `target/dmg/Rind-v<版本>.dmg`。
+签名与公证、Homebrew cask 这些剩下的工作在 [ROADMAP](ROADMAP.md) 里。
 
 ## 3. 第一次打开
 

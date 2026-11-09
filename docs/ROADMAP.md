@@ -35,14 +35,18 @@ CLI 补 `status` / `orphans` / `clean` / `analyze` / `trash` / `launch`。
 - [x] 转为公开仓库（2026-11-09）
 - [x] 打 tag `v0.1.0` 并写 Release notes（[releases/tag/v0.1.0](https://github.com/ahjdzx/rind/releases/tag/v0.1.0)），首个 GitHub Actions 运行通过
 
-## M4 · 能给别人装（候选）
+## M4 · 能给别人装（进行中）
 
 目标是「别人不用装 Rust 也能用上」，顺序按依赖关系排：
 
-1. `.dmg` 打包 + Developer ID 签名 + 公证（没有公证，用户每次都要右键「打开」，这个体验不行）。
-2. `Homebrew cask`（依赖上一步的 dmg 与签名）。
-3. 首次启动引导「完全磁盘访问」（没有它，沙盒容器读不了，卸载体验是残的）。
-4. README 截图与一段 30 秒的演示。
+1. [x] `.dmg` 打包：tag（`v*`）由 GitHub Actions 自动构建并发布（`.github/workflows/release.yml`），
+   本地用 `scripts/package-dmg.sh`（2026-11-09）。
+2. [ ] Developer ID 签名 + 公证 —— 没有公证，用户第一次打开要右键「打开」；这一步才是体验的关键。
+3. [ ] `Homebrew cask`（依赖签名与公证）。
+4. [ ] 首次启动引导「完全磁盘访问」（没有它，沙盒容器读不了，卸载体验是残的）。
+5. [x] README 截图与动图预览（`docs/images/`，2026-11-09）。
+
+顺带候选：universal（arm64 + x86_64）构建——现在 DMG 只有 Apple Silicon 产物。
 
 ## M5 · 把清理做得更准（候选）
 

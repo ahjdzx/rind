@@ -1,0 +1,56 @@
+# 打包发布：tag（v*）推上来时，在 runner 上构建 rind-app、封成 DMG 并挂到 Release。
+# 手动 dispatch 也可以跑：只产出构建产物（artifact），不建 Release，用来验证流水线。
+#
+# 为什么单独一个 workflow：界面构建要整棵 GPU 依赖树 + release 编译，比较慢，
+# 不适合放进每次 push 的 CI（见 ci.yml 顶部说明）。
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: macos-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: 版本一致性（tag 必须等于 v<Cargo.toml 版本>）
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          v=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
+          [ "$GITHUB_REF_NAME" = "v$v" ] || { echo "tag $GITHUB_REF_NAME 与 Cargo.toml 的 v$v 不一致" >&2; exit 1; }
+
+      - name: 打 DMG
+        run: scripts/package-dmg.sh
+
+      - name: 留档构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rind-dmg
+          path: target/dmg/Rind-v*.dmg
+          if-no-files-found: error
+
+      - name: 发布 Release（只在 tag 上）
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="docs/releases/${GITHUB_REF_NAME}.md"
+          if [ -f "$notes" ]; then
+            gh release create "$GITHUB_REF_NAME" target/dmg/Rind-v*.dmg \
+              --title "Rind $GITHUB_REF_NAME" --verify-tag --notes-file "$notes"
+          else
+            gh release create "$GITHUB_REF_NAME" target/dmg/Rind-v*.dmg \
+              --title "Rind $GITHUB_REF_NAME" --verify-tag --generate-notes
+          fi

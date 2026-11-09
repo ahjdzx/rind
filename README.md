@@ -1,5 +1,7 @@
 # Rind
 
+**简体中文** | [English](README.en.md)
+
 卸载 Mac 上的 App，连同它留下的每个文件，并**说明每个文件为什么属于它、有多大把握**。
 只移入废纸篓，从不直接删除；History 一键放回。Rust 编写，界面基于 GPUI。
 
@@ -9,7 +11,26 @@
 [Pearcleaner](https://github.com/alienator88/Pearcleaner) 的长处，然后按自己的规矩重做：
 **可解释、可撤销、保守默认、预演等于真跑**。
 
-> 状态：**0.1.0**，源码构建，还没有预编译包。要装得自己编（见下）。
+> 状态：**0.2.0**。有 DMG 可以装（未签名，见「安装」），也可以从源码构建。
+
+## 预览
+
+界面长这样（示例数据，`RIND_DEMO=1` 跑出来的，没有碰真实系统）：
+
+![总览](docs/images/overview.jpg)
+
+| 卸载：逐个文件给出理由与置信度 | 孤儿残留：已删 App 留下的文件 |
+| --- | --- |
+| ![应用卸载](docs/images/apps.jpg) | ![孤儿残留](docs/images/orphans.jpg) |
+
+| 缓存清理：重建代价高的只列不勾 | 空间分析：谁最占地方 |
+| --- | --- |
+| ![缓存清理](docs/images/cleanup.jpg) | ![空间分析](docs/images/space.jpg) |
+
+全部页面走一遍的动图：[docs/images/demo.gif](docs/images/demo.gif)。
+浅色 / 深色跟随系统，也可以在设置里固定：
+
+![浅色模式的总览](docs/images/overview-light.jpg)
 
 ## 能做什么
 
@@ -34,9 +55,14 @@
 
 细节（含写明的边界）在 [docs/SAFETY.md](docs/SAFETY.md)。
 
-## 构建
+## 安装
 
-需要 macOS 与 Rust 1.85+。**不需要完整 Xcode**（GPUI 用运行时编译的 Metal shader）。
+**下载 DMG（推荐）**：到 [Releases](https://github.com/ahjdzx/rind/releases) 拿最新的 `Rind-v*.dmg`，
+把 Rind 拖进「应用程序」就行。DMG 由 GitHub Actions 在 Apple Silicon 上构建（arm64），
+**没有 Developer ID 签名与公证**——第一次打开需要右键 →「打开」，之后就正常了。
+要求 macOS 14+（开发与验证都在 macOS 26）。Intel 机器没有验证过。
+
+**从源码构建**：需要 macOS 与 Rust 1.85+。**不需要完整 Xcode**（GPUI 用运行时编译的 Metal shader）。
 
 ```sh
 git clone git@github.com:ahjdzx/rind.git
@@ -45,6 +71,8 @@ cargo build --release -p rind-cli      # 命令行 `rind`
 cargo build --release -p rind-app      # 桌面应用
 cargo test --workspace --exclude rind-app
 ```
+
+想自己打 DMG：`scripts/package-dmg.sh`（产物在 `target/dmg/Rind-v<版本>.dmg`）。
 
 ## 先用一下（只读）
 
