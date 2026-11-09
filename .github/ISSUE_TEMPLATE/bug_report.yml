@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         **安全相关的问题请不要在这里写**：能绕过保护区、把不该动的移走、History 放错位置——
-        请按 [SECURITY.md](https://github.com/ahjdzx/rind/blob/master/SECURITY.md) 私下上报。
+        请按 [SECURITY.md](https://github.com/ahjdzx/rind/blob/main/SECURITY.md) 私下上报。
 
   - type: input
     id: version
