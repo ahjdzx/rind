@@ -25,15 +25,15 @@ History 放回。crate 拆成 `rind-core` / `rind-i18n` / `rind-cli` / `rind-app
 CLI 补 `status` / `orphans` / `clean` / `analyze` / `trash` / `launch`。
 两轮独立审查（正确性 + 对抗性安全）发现的问题全部修完。
 
-## M3 · 开源化（2026-11-09，进行中）
+## M3 · 开源化（2026-11-09，已完成）
 
 - [x] LICENSE（GPL-3.0-or-later）、CHANGELOG、CONTRIBUTING、SECURITY、行为准则、issue / PR 模板
 - [x] 设计与使用文档：`docs/DESIGN.md`、`docs/USAGE.md`、`docs/SAFETY.md`
 - [x] 本地里程碑（本文件）
-- [x] 推送到 GitHub（私有仓库）
+- [x] 推送到 GitHub
 - [x] 持续集成：`fmt` + `clippy` + 测试（macOS runner）
-- [ ] 决定是否转为公开仓库
-- [ ] 打 tag `v0.1.0` 并写 Release notes
+- [x] 转为公开仓库（2026-11-09）
+- [x] 打 tag `v0.1.0` 并写 Release notes（[releases/tag/v0.1.0](https://github.com/ahjdzx/rind/releases/tag/v0.1.0)），首个 GitHub Actions 运行通过
 
 ## M4 · 能给别人装（候选）
 
