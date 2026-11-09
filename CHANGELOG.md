@@ -22,8 +22,10 @@
 
 ### 文档
 
-- 新增英文 README（[README.en.md](README.en.md)），中英文互相链接。
-- 新增界面截图与动图预览（`docs/images/`），README 顶部有预览区。
+- 英文 README 成为仓库首页（[README.md](README.md)），中文版移到
+  [README.zh-CN.md](README.zh-CN.md)，两版互相链接。
+- 新增界面截图与动图预览，按语言分目录：英文版配英文界面截图（`docs/images/en/`），
+  中文版配中文截图（`docs/images/zh/`），各自带一份 `demo.gif`。
 
 ## 计划中
 

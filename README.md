@@ -1,134 +1,152 @@
 # Rind
 
-**简体中文** | [English](README.en.md)
+**English** | [简体中文](README.zh-CN.md)
 
-卸载 Mac 上的 App，连同它留下的每个文件，并**说明每个文件为什么属于它、有多大把握**。
-只移入废纸篓，从不直接删除；History 一键放回。Rust 编写，界面基于 GPUI。
+Uninstall Mac apps together with every file they leave behind — and **say why each file belongs
+to the app, and how sure Rind is**. Everything is moved to the Trash, never deleted outright;
+History puts it back in one click. Written in Rust, with a GPUI interface.
 
-吸收 [Peel](https://github.com/TuguiDragos/Peel)（逐文件证据与保护区）、
-[Mole](https://github.com/tw93/Mole)（CLI 优先、`--dry-run`）、
-[腾讯柠檬](https://github.com/Tencent/lemon-cleaner)（数据驱动的规则库）与
-[Pearcleaner](https://github.com/alienator88/Pearcleaner) 的长处，然后按自己的规矩重做：
-**可解释、可撤销、保守默认、预演等于真跑**。
+It learns from [Peel](https://github.com/TuguiDragos/Peel) (per-file evidence and protected
+areas), [Mole](https://github.com/tw93/Mole) (CLI-first, `--dry-run`),
+[Tencent Lemon](https://github.com/Tencent/lemon-cleaner) (data-driven cleanup rules) and
+[Pearcleaner](https://github.com/alienator88/Pearcleaner) (the app itself), then redoes it by
+its own rules: **explainable, undoable, conservative defaults, and a dry run that equals the
+real run**.
 
-> 状态：**0.2.0**。有 DMG 可以装（未签名，见「安装」），也可以从源码构建。
+> Status: **0.2.0**. A DMG is available (unsigned — see Install); you can also build from source.
 
-## 预览
+## Preview
 
-界面长这样（示例数据，`RIND_DEMO=1` 跑出来的，没有碰真实系统）：
+What it looks like (sample data via `RIND_DEMO=1`, nothing on your real system is touched):
 
-![总览](docs/images/overview.jpg)
+![Overview](docs/images/en/overview.jpg)
 
-| 卸载：逐个文件给出理由与置信度 | 孤儿残留：已删 App 留下的文件 |
+| Uninstall: a reason and a confidence for every file | Orphans: files left behind by deleted apps |
 | --- | --- |
-| ![应用卸载](docs/images/apps.jpg) | ![孤儿残留](docs/images/orphans.jpg) |
+| ![Uninstall](docs/images/en/apps.jpg) | ![Orphans](docs/images/en/orphans.jpg) |
 
-| 缓存清理：重建代价高的只列不勾 | 空间分析：谁最占地方 |
+| Cleanup: expensive-to-rebuild caches are listed but not checked | Space: what actually fills the disk |
 | --- | --- |
-| ![缓存清理](docs/images/cleanup.jpg) | ![空间分析](docs/images/space.jpg) |
+| ![Cleanup](docs/images/en/cleanup.jpg) | ![Space](docs/images/en/space.jpg) |
 
-全部页面走一遍的动图：[docs/images/demo.gif](docs/images/demo.gif)。
-浅色 / 深色跟随系统，也可以在设置里固定：
+An animated loop of every page: [docs/images/en/demo.gif](docs/images/en/demo.gif).
+Light / dark follows the system, or you can pin it in Settings:
 
-![浅色模式的总览](docs/images/overview-light.jpg)
+![The overview in light mode](docs/images/en/overview-light.jpg)
 
-## 能做什么
+## What it does
 
-- **卸载**：App 与它的残留一起，逐项给出理由（bundle id、内嵌组件、App Group、签名 Team、Homebrew cask、
-  pkg 回执）与置信度（certain / likely / possible）。
-- **孤儿残留**：已删除 App 留下的文件——刚拖进废纸篓的也算。
-- **清理**：缓存、日志、浏览器缓存、Xcode、包管理器缓存、项目构建产物；重建代价高的只列不勾。
-- **空间**：谁最占地方、大文件在哪（按实际占用算，APFS clone 与硬链接去重）。
-- **启动项**：LaunchAgents / LaunchDaemons 的查看、停用、移除。
-- **命令行与界面同一套判断**：`rind` 有 12 个子命令，全部支持 `--json`，会移动东西的支持 `--dry-run`。
+- **Uninstall**: the app plus its leftovers, with a reason per item (bundle id, embedded
+  components, App Groups, signing Team, Homebrew cask, pkg receipts) and a confidence
+  (certain / likely / possible).
+- **Orphans**: files left behind by apps you already deleted — including apps just moved to
+  the Trash.
+- **Cleanup**: caches, logs, browser caches, Xcode, package-manager caches, project build
+  artifacts; things that are expensive to rebuild are listed but never pre-checked.
+- **Space**: what takes up the most room and where the big files are (real usage after
+  de-duplicating APFS clones and hard links).
+- **Launch items**: see, disable and remove LaunchAgents / LaunchDaemons.
+- **The CLI and the GUI use the same judgement**: `rind` has 12 subcommands, all with
+  `--json`, and everything that moves files supports `--dry-run`.
 
-## 安全原则
+## Safety principles
 
-- **只进废纸篓。** 每一项都用 `NSFileManager.trashItem` 移动，History 记录它在废纸篓里的实际位置，随时放回。
-  没有记录的东西不会进废纸篓。
-- **保护区任何选择都不能覆盖。** iCloud Drive、钥匙串、SSH / GPG 密钥、Mail、Messages、Safari、照片与音乐库、
-  iPhone 备份、桌面 / 文稿 / 下载等文件夹本身、系统路径、带加密钱包扩展的浏览器 profile。`rind protected` 列出全部。
-- **不替你选拿不准的。** 只有 certain / likely、没有别的 App 共用、大小已知的项才会被预先勾上；
-  读不了的目录显示「未知」，绝不显示 0。
-- **移动前再查一次。** 解析成盘上的真实路径，和扫描时不一致就拒绝；外层目录里有不能动的东西时整个外层拒绝。
-- 没有账号、没有遥测、没有常驻进程——你不按按钮，它什么都不做。
+- **Trash only.** Every item moves via `NSFileManager.trashItem`; History records where it
+  actually landed in the Trash so it can be put back. Nothing without a record is ever trashed.
+- **Protected areas cannot be overridden by any selection**: iCloud Drive, Keychains, SSH /
+  GPG keys, Mail, Messages, Safari, Photos and Music libraries, iPhone backups, the Desktop /
+  Documents / Downloads folders themselves, system paths, and browser profiles with crypto
+  wallets. `rind protected` lists them all.
+- **It does not guess for you.** Only certain / likely items that no other app shares and whose
+  size is known are pre-checked; unreadable directories report “unknown”, never 0.
+- **It checks once more before moving.** The resolved on-disk path must match what was scanned,
+  or the move is refused; a folder that contains anything protected is refused as a whole.
+- No account, no telemetry, no background daemon — if you do not press the button, it does
+  nothing.
 
-细节（含写明的边界）在 [docs/SAFETY.md](docs/SAFETY.md)。
+The details (including known limits) are in [docs/SAFETY.md](docs/SAFETY.md) (Chinese).
 
-## 安装
+## Install
 
-**下载 DMG（推荐）**：到 [Releases](https://github.com/ahjdzx/rind/releases) 拿最新的 `Rind-v*.dmg`，
-把 Rind 拖进「应用程序」就行。DMG 由 GitHub Actions 在 Apple Silicon 上构建（arm64），
-**没有 Developer ID 签名与公证**——第一次打开需要右键 →「打开」，之后就正常了。
-要求 macOS 14+（开发与验证都在 macOS 26）。Intel 机器没有验证过。
+**Download the DMG (recommended)**: grab the latest `Rind-v*.dmg` from
+[Releases](https://github.com/ahjdzx/rind/releases) and drag Rind into Applications.
+The DMG is built by GitHub Actions on Apple Silicon (arm64) and is **not signed or notarized
+with a Developer ID** — the first launch needs right-click → Open, after that it behaves
+normally. Requires macOS 14+ (development and testing happen on macOS 26). Intel Macs are
+untested.
 
-**从源码构建**：需要 macOS 与 Rust 1.85+。**不需要完整 Xcode**（GPUI 用运行时编译的 Metal shader）。
+**Build from source**: needs macOS and Rust 1.85+. A full Xcode is **not** required
+(GPUI compiles its Metal shaders at runtime).
 
 ```sh
 git clone git@github.com:ahjdzx/rind.git
 cd rind
-cargo build --release -p rind-cli      # 命令行 `rind`
-cargo build --release -p rind-app      # 桌面应用
+cargo build --release -p rind-cli      # the `rind` CLI
+cargo build --release -p rind-app      # the desktop app
 cargo test --workspace --exclude rind-app
 ```
 
-想自己打 DMG：`scripts/package-dmg.sh`（产物在 `target/dmg/Rind-v<版本>.dmg`）。
+To build a DMG yourself: `scripts/package-dmg.sh` (output in `target/dmg/Rind-v<version>.dmg`).
 
-## 先用一下（只读）
+## Try it (read-only)
 
 ```sh
-./target/release/rind status             # 磁盘 + 可卸载的 App 数
-./target/release/rind leftovers 微信      # 微信留下了什么，每个文件为什么算它的
-./target/release/rind protected          # 它永远不动的地方
+./target/release/rind status             # disk + number of uninstallable apps
+./target/release/rind leftovers WeChat   # what WeChat left behind, and why each file is its
+./target/release/rind protected          # what it will never touch
 
-RIND_DEMO=1 cargo run -p rind-app        # 桌面应用，示例数据，不碰系统
+RIND_DEMO=1 cargo run -p rind-app        # the desktop app, sample data, nothing is touched
 ```
 
-`rind status --scan` 会再扫一遍孤儿与可清理项；`--help` 有全部参数。
+`rind status --scan` also scans for orphans and cleanable items; `--help` lists every flag.
 
-## `rind` 命令一览
+## The `rind` command
 
 ```
-查看      apps · leftovers · protected · history · status · analyze · launch list
-卸载      uninstall <app>          [--dry-run] [--yes] [--all] [--keep-app] [--quit] [--force-quit]
-孤儿      orphans                  [--trash] [--all] [--path P] [--dry-run] [--yes]
-清理      clean                    [--trash] [--category C] [--project-root D] [--min-age N] [--dry-run] [--yes]
-任意文件  trash <path>...          [--dry-run] [--yes]
-放回      restore <id>
-启动项    launch list|disable|enable|remove <label>...
+view      apps · leftovers · protected · history · status · analyze · launch list
+uninstall uninstall <app>          [--dry-run] [--yes] [--all] [--keep-app] [--quit] [--force-quit]
+orphans   orphans                  [--trash] [--all] [--path P] [--dry-run] [--yes]
+clean     clean                    [--trash] [--category C] [--project-root D] [--min-age N] [--dry-run] [--yes]
+any file  trash <path>...          [--dry-run] [--yes]
+restore   restore <id>
+launch    launch list|disable|enable|remove <label>...
 
-全局：--json（给脚本和 agent 用）· --lang zh|en
+global: --json (for scripts and agents) · --lang zh|en
 ```
 
-完整说明与示例见 [docs/USAGE.md](docs/USAGE.md)。
+Full documentation (Chinese): [docs/USAGE.md](docs/USAGE.md).
 
-## 规则库
+## Rules
 
-`rules/*.toml` 为具体 App 补充清理路径（国内常用软件优先），编译时内嵌。规则只能**补充**证据，不能绕过保护区。
-想加规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+`rules/*.toml` add app-specific cleanup paths (Chinese-market apps first) and are baked in at
+build time. Rules can only **add** evidence; they can never bypass a protected area. See
+[CONTRIBUTING.md](CONTRIBUTING.md) to add one.
 
-## 文档
+## Documentation
 
-| 文档 | 内容 |
+All of it is in Chinese for now.
+
+| Document | Contents |
 | --- | --- |
-| [docs/USAGE.md](docs/USAGE.md) | 使用手册：安装、界面、全部命令、文件位置、常见问题 |
-| [docs/DESIGN.md](docs/DESIGN.md) | 设计：目标与非目标、信息架构、交互与视觉、扩展点 |
-| [docs/SAFETY.md](docs/SAFETY.md) | 安全模型：唯一出口、保护区、History、已知边界、怎么自己验证 |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 技术架构：一次卸载怎么走、各模块契约 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 里程碑与候选计划 |
-| [CHANGELOG.md](CHANGELOG.md) | 每个版本的改动 |
+| [docs/USAGE.md](docs/USAGE.md) | Manual: install, UI, every command, file locations, FAQ |
+| [docs/DESIGN.md](docs/DESIGN.md) | Design: goals and non-goals, information architecture, interaction and visuals |
+| [docs/SAFETY.md](docs/SAFETY.md) | Safety model: the single exit, protected areas, History, known limits, how to verify |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical architecture: what happens during an uninstall, module contracts |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones and candidates |
+| [CHANGELOG.md](CHANGELOG.md) | Changes per release |
 
-## 参与
+## Contributing
 
-- 贡献流程与「不可破坏的不变量」：[CONTRIBUTING.md](CONTRIBUTING.md)
-- 安全问题请私下报：[SECURITY.md](SECURITY.md)
-- 行为准则：[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)（Contributor Covenant 2.1）
+- Process and the “invariants that must not break”: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Security issues: report privately via [SECURITY.md](SECURITY.md)
+- Code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) (Contributor Covenant 2.1)
 
-## 许可证
+## License
 
-GPL-3.0-or-later，见 [LICENSE](LICENSE)。
+GPL-3.0-or-later, see [LICENSE](LICENSE).
 
-## 致谢
+## Acknowledgements
 
-Peel、Mole、腾讯柠檬、Pearcleaner 把这条路走通过一遍，Rind 站在它们的经验上；
-GPUI 与 [gpui-component](https://github.com/longbridge/gpui-component) 提供了界面层。
+Peel, Mole, Tencent Lemon and Pearcleaner walked this road first; Rind stands on their
+experience. The UI layer is GPUI and
+[gpui-component](https://github.com/longbridge/gpui-component).

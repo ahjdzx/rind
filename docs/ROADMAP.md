@@ -44,7 +44,7 @@ CLI 补 `status` / `orphans` / `clean` / `analyze` / `trash` / `launch`。
 2. [ ] Developer ID 签名 + 公证 —— 没有公证，用户第一次打开要右键「打开」；这一步才是体验的关键。
 3. [ ] `Homebrew cask`（依赖签名与公证）。
 4. [ ] 首次启动引导「完全磁盘访问」（没有它，沙盒容器读不了，卸载体验是残的）。
-5. [x] README 截图与动图预览（`docs/images/`，2026-11-09）。
+5. [x] README 截图与动图预览，按语言分目录（`docs/images/{en,zh}/`，2026-11-09）。
 
 顺带候选：universal（arm64 + x86_64）构建——现在 DMG 只有 Apple Silicon 产物。
 
