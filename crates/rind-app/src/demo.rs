@@ -1579,7 +1579,7 @@ fn launch_items(env: &Env) -> Vec<LaunchItem> {
 // ---------------------------------------------------------------------------------------------
 // 历史与状态
 
-fn seed_history(env: &Env) -> Vec<HistoryRecord> {
+fn seed_history(env: &Env, lang: Lang) -> Vec<HistoryRecord> {
     let trash = env.home.join(".Trash");
     let item = |original: PathBuf, size: u64| HistoryItem {
         trashed: trash.join(original.file_name().unwrap_or_default()),
@@ -1623,7 +1623,7 @@ fn seed_history(env: &Env) -> Vec<HistoryRecord> {
             "demo-3",
             26,
             RecordKind::Cleanup,
-            "缓存清理",
+            crate::strings::ui(lang, crate::strings::Key::NavCleanup),
             None,
             vec![
                 item(
@@ -1673,9 +1673,11 @@ pub struct DemoState {
 }
 
 impl DemoState {
-    pub fn new(env: &Env) -> Self {
+    /// `lang` 用来生成示例历史里和界面语言有关的条目（清理批次的标题），跟真实 GUI 写进
+    /// ledger 的文案保持一致（`ui(lang, Key::NavCleanup)`）。
+    pub fn new(env: &Env, lang: Lang) -> Self {
         Self {
-            history: seed_history(env),
+            history: seed_history(env, lang),
             launch: launch_items(env),
             running: [WECHAT.to_string()].into(),
             gone: HashSet::new(),

@@ -34,32 +34,36 @@ use crate::strings::{Lang, LangSetting};
 
 actions!(rind, [Quit]);
 
+/// 启动时的界面语言：`RIND_LANG` >（真实模式）记住的选择 > 示例模式默认中文 / 系统区域。
+fn resolve_lang(demo: bool) -> Lang {
+    if let Some(value) = std::env::var("RIND_LANG")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+    {
+        match Lang::from_code(&value) {
+            Some(lang) => return lang,
+            None => eprintln!("rind: 不认识 RIND_LANG={value:?}（想要 zh / en），忽略"),
+        }
+    }
+    if demo {
+        return Lang::ZhCn;
+    }
+    if let Some(lang) = prefs::load_lang(&rind_core::Env::detect().data_dir) {
+        return lang;
+    }
+    Lang::detect()
+}
+
 fn main() {
     let demo = std::env::var_os("RIND_DEMO").is_some_and(|v| !v.is_empty() && v != "0");
-    let services = Arc::new(Services::new(demo));
+    // 语言要先定下来：示例历史的清理批次标题按界面语言生成（和真实 GUI 写 ledger 的文案一致）。
+    let lang = resolve_lang(demo);
+    let services = Arc::new(Services::new(demo, lang));
 
     let app = gpui_kit::application().with_assets(gpui_kit::assets::Assets);
     app.run(move |cx| {
         gpui_kit::init(cx);
         cx.set_global(CleanupPrefs::default());
-        let lang = std::env::var("RIND_LANG")
-            .ok()
-            .filter(|value| !value.trim().is_empty())
-            .and_then(|value| {
-                let parsed = Lang::from_code(&value);
-                if parsed.is_none() {
-                    eprintln!("rind: 不认识 RIND_LANG={value:?}（想要 zh / en），忽略");
-                }
-                parsed
-            })
-            .or_else(|| {
-                if services.is_demo() {
-                    None
-                } else {
-                    prefs::load_lang(&services.env().data_dir)
-                }
-            })
-            .unwrap_or_else(|| services.default_lang());
         cx.set_global(LangSetting::new(lang));
         let appearance = std::env::var("RIND_APPEARANCE")
             .ok()

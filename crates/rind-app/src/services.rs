@@ -246,14 +246,15 @@ pub struct Services {
 }
 
 impl Services {
-    pub fn new(demo: bool) -> Self {
+    /// `lang` 只在示例模式用：示例历史要在构造时按界面语言生成（真实模式读 ledger）。
+    pub fn new(demo: bool, lang: Lang) -> Self {
         let env = Env::detect();
         let ledger = if demo {
             Err("demo".to_string())
         } else {
             Ledger::open(&env).map_err(|e| format!("{e:#}"))
         };
-        let demo_state = Mutex::new(demo::DemoState::new(&env));
+        let demo_state = Mutex::new(demo::DemoState::new(&env, lang));
         Self {
             env,
             demo,
@@ -278,15 +279,6 @@ impl Services {
             return None;
         }
         self.ledger.as_ref().err().map(String::as_str)
-    }
-
-    /// 启动时的语言：真实模式问 i18n，示例模式固定中文。
-    pub fn default_lang(&self) -> Lang {
-        if self.demo {
-            Lang::ZhCn
-        } else {
-            Lang::detect()
-        }
     }
 
     /// 规则库（含 Homebrew cask 索引）只读一次，之后每次扫描复用。
