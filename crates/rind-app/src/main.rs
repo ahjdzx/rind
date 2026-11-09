@@ -2,6 +2,7 @@
 //!
 //! 外观优先级：`RIND_APPEARANCE=system|light|dark` > 上次在设置里选的那个（存在
 //! `<data-dir>/appearance`）> 跟随系统。示例模式不读盘上的选择。
+//! 语言同理：`RIND_LANG=zh|en` > `<data-dir>/language` > 系统区域设置（`Lang::detect`）。
 
 mod app;
 mod apps_page;
@@ -28,7 +29,7 @@ use gpui_kit::*;
 use crate::app::RindApp;
 use crate::services::{CleanupPrefs, Services};
 use crate::settings_page::Appearance;
-use crate::strings::LangSetting;
+use crate::strings::{Lang, LangSetting};
 
 actions!(rind, [Quit]);
 
@@ -39,8 +40,25 @@ fn main() {
     let app = gpui_kit::application().with_assets(gpui_kit::assets::Assets);
     app.run(move |cx| {
         gpui_kit::init(cx);
-        cx.set_global(LangSetting::new(services.default_lang()));
         cx.set_global(CleanupPrefs::default());
+        let lang = std::env::var("RIND_LANG")
+            .ok()
+            .and_then(|value| {
+                let parsed = Lang::from_code(&value);
+                if parsed.is_none() {
+                    eprintln!("rind: 不认识 RIND_LANG={value:?}（想要 zh / en），忽略");
+                }
+                parsed
+            })
+            .or_else(|| {
+                if services.is_demo() {
+                    None
+                } else {
+                    prefs::load_lang(&services.env().data_dir)
+                }
+            })
+            .unwrap_or_else(|| services.default_lang());
+        cx.set_global(LangSetting::new(lang));
         let appearance = std::env::var("RIND_APPEARANCE")
             .ok()
             .and_then(|value| {

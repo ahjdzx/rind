@@ -1,4 +1,4 @@
-//! 设置页：外观（会记住）、语言、缓存清理的偏好，以及 Rind 永远不动的地方。
+//! 设置页：外观与语言（都会记住）、缓存清理的偏好，以及 Rind 永远不动的地方。
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -116,6 +116,11 @@ impl SettingsPage {
             return;
         }
         cx.set_global(LangSetting::new(lang));
+        if !self.services.is_demo() {
+            if let Err(err) = crate::prefs::save_lang(&self.services.env().data_dir, lang) {
+                eprintln!("rind: 保存语言偏好失败：{err}");
+            }
+        }
         cx.notify();
     }
 

@@ -60,6 +60,27 @@ impl Lang {
             Lang::En => "en",
         }
     }
+
+    /// 存盘用的稳定代码：`zh` / `en`（`tag` 是给展示用的 BCP-47 写法）。
+    pub fn code(self) -> &'static str {
+        match self {
+            Lang::ZhCn => "zh",
+            Lang::En => "en",
+        }
+    }
+
+    /// 从 [`Lang::code`] 的代码认回来，`zh-CN` 这类变体也认（和 `RIND_LANG` 一样宽容）；
+    /// 认不出来返回 `None`。
+    pub fn from_code(text: &str) -> Option<Lang> {
+        let text = text.trim().to_ascii_lowercase();
+        if text.starts_with("en") {
+            Some(Lang::En)
+        } else if text.starts_with("zh") {
+            Some(Lang::ZhCn)
+        } else {
+            None
+        }
+    }
 }
 
 /// 界面与 CLI 的固定文案，按 key 取。key 不存在时返回 key 本身（便于发现漏翻）。
@@ -457,6 +478,18 @@ mod tests {
             "nothing set means Chinese"
         );
         assert_eq!(Lang::ZhCn.tag(), "zh-CN");
+    }
+
+    #[test]
+    fn language_codes_round_trip() {
+        assert_eq!(Lang::ZhCn.code(), "zh");
+        assert_eq!(Lang::En.code(), "en");
+        for lang in [Lang::ZhCn, Lang::En] {
+            assert_eq!(Lang::from_code(lang.code()), Some(lang));
+        }
+        assert_eq!(Lang::from_code(" EN "), Some(Lang::En));
+        assert_eq!(Lang::from_code("zh_CN.UTF-8"), Some(Lang::ZhCn));
+        assert_eq!(Lang::from_code("fr"), None);
     }
 
     #[test]
