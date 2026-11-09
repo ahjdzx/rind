@@ -5,6 +5,12 @@
 
 ## [未发布]
 
+### 新增
+
+- 深色模式完整支持：外观可选「跟随系统 / 浅色 / 深色」，选择会记住（`<data-dir>/appearance`），
+  下次启动沿用；强制浅色 / 深色时，原生窗口边框与标题栏一起切换。
+- `RIND_APPEARANCE=system|light|dark` 环境变量：启动时指定外观，优先于记住的选择；示例模式也认。
+
 ### 计划中
 
 见 [docs/ROADMAP.md](docs/ROADMAP.md)。当前候选：`.dmg` 打包与签名公证、Homebrew cask、

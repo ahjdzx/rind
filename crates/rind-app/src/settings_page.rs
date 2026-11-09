@@ -1,4 +1,4 @@
-//! 设置页：外观、语言、缓存清理的偏好（本次运行内有效），以及 Rind 永远不动的地方。
+//! 设置页：外观（会记住）、语言、缓存清理的偏好，以及 Rind 永远不动的地方。
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -31,12 +31,41 @@ impl Global for Appearance {}
 impl Appearance {
     const ALL: [Appearance; 3] = [Appearance::System, Appearance::Light, Appearance::Dark];
 
+    /// 落盘用的名字。改了要当作兼容性变更（旧文件会认不出来，落回跟随系统）。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Appearance::System => "system",
+            Appearance::Light => "light",
+            Appearance::Dark => "dark",
+        }
+    }
+
+    /// 从落盘的名字解析；认不出来返回 `None`。
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "system" => Some(Appearance::System),
+            "light" => Some(Appearance::Light),
+            "dark" => Some(Appearance::Dark),
+            _ => None,
+        }
+    }
+
     /// 套用到主题上。
     pub fn apply(self, window: Option<&mut Window>, cx: &mut App) {
         match self {
-            Appearance::System => Theme::sync_system_appearance(window, cx),
-            Appearance::Light => Theme::change(ThemeMode::Light, window, cx),
-            Appearance::Dark => Theme::change(ThemeMode::Dark, window, cx),
+            Appearance::System => {
+                // 清掉覆盖，窗口（包括原生标题栏、边框）重新跟系统走。
+                cx.set_window_appearance(None);
+                Theme::sync_system_appearance(window, cx);
+            }
+            Appearance::Light => {
+                cx.set_window_appearance(Some(WindowAppearance::Light));
+                Theme::change(ThemeMode::Light, window, cx);
+            }
+            Appearance::Dark => {
+                cx.set_window_appearance(Some(WindowAppearance::Dark));
+                Theme::change(ThemeMode::Dark, window, cx);
+            }
         }
         cx.refresh_windows();
     }
@@ -173,11 +202,25 @@ impl SettingsPage {
                                 ui(lang, Key::AppearanceDark),
                             ])
                             .selected_index(appearance_ix)
-                            .on_change(cx.listener(|_, ix: &usize, window, cx| {
+                            .on_change(cx.listener(|this, ix: &usize, window, cx| {
                                 let appearance =
                                     Appearance::ALL.get(*ix).copied().unwrap_or_default();
+                                // 点已选中的项、或组件同步状态时的重复事件，都不做事。
+                                if cx.try_global::<Appearance>().copied().unwrap_or_default()
+                                    == appearance
+                                {
+                                    return;
+                                }
                                 cx.set_global(appearance);
                                 appearance.apply(Some(window), cx);
+                                if !this.services.is_demo() {
+                                    if let Err(err) = crate::prefs::save(
+                                        &this.services.env().data_dir,
+                                        appearance,
+                                    ) {
+                                        eprintln!("rind: 保存外观偏好失败：{err}");
+                                    }
+                                }
                             })),
                     ),
             )

@@ -1,4 +1,7 @@
 //! Rind 的桌面应用。`RIND_DEMO=1` 时用固定的示例数据，不碰真实系统。
+//!
+//! 外观优先级：`RIND_APPEARANCE=system|light|dark` > 上次在设置里选的那个（存在
+//! `<data-dir>/appearance`）> 跟随系统。示例模式不读盘上的选择。
 
 mod app;
 mod apps_page;
@@ -10,6 +13,7 @@ mod launch_page;
 mod model;
 mod orphans_page;
 mod overview_page;
+mod prefs;
 mod services;
 mod settings_page;
 mod space_page;
@@ -37,7 +41,18 @@ fn main() {
         gpui_kit::init(cx);
         cx.set_global(LangSetting::new(services.default_lang()));
         cx.set_global(CleanupPrefs::default());
-        cx.set_global(Appearance::default());
+        let appearance = std::env::var("RIND_APPEARANCE")
+            .ok()
+            .and_then(|value| Appearance::parse(value.trim()))
+            .or_else(|| {
+                if services.is_demo() {
+                    None
+                } else {
+                    prefs::load(&services.env().data_dir)
+                }
+            })
+            .unwrap_or_default();
+        cx.set_global(appearance);
 
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
         cx.on_action(|_: &Quit, cx: &mut App| cx.quit());
