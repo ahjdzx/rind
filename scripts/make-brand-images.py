@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""生成品牌图：docs/images/icon-256.png、icon-512.png、social-preview.png。
+
+依赖 Pillow（`python3 -m pip install pillow`）与 macOS 自带字体
+（SF Rounded / SF / SF Mono）。文件在任意位置跑都可以，输出落在仓库
+docs/images/ 下：
+
+- icon-*：黄底圆角方格 + 深色 "R"。给 awesome 列表的 icon_url 用。
+- social-preview.png：1280x640，供 GitHub 仓库 Settings -> Social preview
+  手动上传（API 不支持设置社交预览图）。
+
+用法：python3 scripts/make-brand-images.py
+"""
+
+import math
+import pathlib
+
+from PIL import Image, ImageDraw, ImageFont
+
+REPO = pathlib.Path(__file__).resolve().parent.parent
+OUT_DIR = REPO / "docs" / "images"
+
+INK = (11, 11, 12, 255)  # 近黑，跟应用深色主题一致
+TILE_TOP = (255, 214, 74)
+TILE_BOTTOM = (239, 174, 0)
+BG = (11, 11, 12)
+
+SS = 4  # 超采样倍率
+
+SF_ROUNDED = "/System/Library/Fonts/SFNSRounded.ttf"
+SF = "/System/Library/Fonts/SFNS.ttf"
+SF_MONO = "/System/Library/Fonts/SFNSMono.ttf"
+
+
+def font(path: str, size: int, variation: str | None = None) -> ImageFont.FreeTypeFont:
+    f = ImageFont.truetype(path, size)
+    if variation:
+        f.set_variation_by_name(variation)
+    return f
+
+
+def rounded_tile(size: int) -> Image.Image:
+    """黄底圆角方格，顶部带一点高光。"""
+    s = size * SS
+    grad = Image.new("RGB", (s, s))
+    d = ImageDraw.Draw(grad)
+    for y in range(s):
+        t = y / (s - 1)
+        c = tuple(int(TILE_TOP[i] + (TILE_BOTTOM[i] - TILE_TOP[i]) * t) for i in range(3))
+        d.line([(0, y), (s, y)], fill=c)
+    glaze = Image.new("L", (s, s), 0)
+    gd = ImageDraw.Draw(glaze)
+    for y in range(int(s * 0.40)):
+        gd.line([(0, y), (s, y)], fill=int(38 * (1 - y / (s * 0.40))))
+    grad = Image.composite(Image.new("RGB", (s, s), (255, 255, 255)), grad, glaze)
+    mask = Image.new("L", (s, s), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, s - 1, s - 1], radius=int(s * 0.235), fill=255)
+    tile = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    tile.paste(grad, (0, 0), mask)
+    return tile
+
+
+def render_icon(size: int) -> Image.Image:
+    s = size * SS
+    tile = rounded_tile(size)
+    d = ImageDraw.Draw(tile)
+    f = font(SF_ROUNDED, int(s * 0.60), "Bold")
+    d.text((s * 0.502, s * 0.508), "R", font=f, fill=INK, anchor="mm")
+    return tile.resize((size, size), Image.LANCZOS)
+
+
+def radial_glow(size: tuple[int, int], center: tuple[float, float], radius: float, color: tuple[int, int, int], peak: float) -> Image.Image:
+    """小图逐像素算完再放大，便宜且平滑。"""
+    w, h = size
+    small = Image.new("RGB", (w // 4, h // 4))
+    px = small.load()
+    for y in range(h // 4):
+        for x in range(w // 4):
+            dx = x * 4 - center[0]
+            dy = y * 4 - center[1]
+            t = math.hypot(dx, dy) / radius
+            k = max(0.0, 1.0 - t) ** 2 * peak
+            px[x, y] = (
+                int(BG[0] + (color[0] - BG[0]) * k),
+                int(BG[1] + (color[1] - BG[1]) * k),
+                int(BG[2] + (color[2] - BG[2]) * k),
+            )
+    return small.resize(size, Image.BICUBIC)
+
+
+def render_social() -> Image.Image:
+    w, h = 1280, 640
+    img = radial_glow((w, h), (256, 320), 560, (240, 182, 0), 0.16)
+    tile = render_icon(256)
+    img.paste(tile, (128, 192), tile)
+
+    d = ImageDraw.Draw(img)
+    title_font = font(SF, 148, "Bold")
+    d.text((442, 256), "Rind", font=title_font, fill=(245, 245, 247), anchor="lm")
+    d.text(
+        (448, 366),
+        "Explainable, undoable macOS uninstaller",
+        font=font(SF, 42, "Regular"),
+        fill=(166, 166, 174),
+        anchor="lm",
+    )
+    d.text(
+        (449, 438),
+        "Rust · GPUI · GPL-3.0 · macOS 14+",
+        font=font(SF_MONO, 26, "Regular"),
+        fill=(117, 117, 125),
+        anchor="lm",
+    )
+    return img
+
+
+def main() -> None:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    for size in (256, 512):
+        render_icon(size).save(OUT_DIR / f"icon-{size}.png")
+    render_social().save(OUT_DIR / "social-preview.png")
+    for name in ("icon-256.png", "icon-512.png", "social-preview.png"):
+        p = OUT_DIR / name
+        print(f"{p.relative_to(REPO)}  {p.stat().st_size:,} bytes")
+
+
+if __name__ == "__main__":
+    main()
