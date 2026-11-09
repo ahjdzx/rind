@@ -61,18 +61,10 @@ pub fn quit(app: &InstalledApp, force: bool) -> anyhow::Result<()> {
             }
         }
     } else {
-        let script = match &app.bundle_id {
-            Some(id) => format!("tell application id \"{}\" to quit", id.replace('"', "")),
-            None => format!(
-                "tell application \"{}\" to quit",
-                app.path.display().to_string().replace('"', "")
-            ),
-        };
-        let output = crate::apps::run_with_timeout(
-            "/usr/bin/osascript",
-            &["-e", &script],
-            Duration::from_secs(10),
-        );
+        let args = quit_script_args(app);
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let output =
+            crate::apps::run_with_timeout("/usr/bin/osascript", &args, Duration::from_secs(10));
         match output {
             Some(output) if output.status.success() => {}
             Some(output) => {
@@ -92,6 +84,37 @@ pub fn quit(app: &InstalledApp, force: bool) -> anyhow::Result<()> {
         std::thread::sleep(Duration::from_millis(200));
     }
     anyhow::bail!("{} is still running", app.name)
+}
+
+/// `osascript` 的参数。bundle id 和路径来自 App 包里的文件，谁都能写，所以从不拼进脚本文本：
+/// 脚本是固定的，目标经 `on run argv` 当数据传进去。bundle id 还要像个 bundle id（`[A-Za-z0-9.-]`），
+/// 不像就按路径找这个 App。
+fn quit_script_args(app: &InstalledApp) -> Vec<String> {
+    let plain_id = app.bundle_id.as_deref().filter(|id| {
+        !id.is_empty()
+            && id
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')
+    });
+    let (tell, target) = match plain_id {
+        Some(id) => (
+            "tell application id (item 1 of argv) to quit",
+            id.to_string(),
+        ),
+        None => (
+            "tell application (item 1 of argv) to quit",
+            app.path.to_string_lossy().to_string(),
+        ),
+    };
+    vec![
+        "-e".into(),
+        "on run argv".into(),
+        "-e".into(),
+        tell.into(),
+        "-e".into(),
+        "end run".into(),
+        target,
+    ]
 }
 
 #[cfg(test)]
@@ -116,6 +139,37 @@ mod tests {
         };
         assert!(!is_running(&app));
         assert!(quit(&app, false).is_ok(), "nothing to quit is fine");
+    }
+
+    #[test]
+    fn the_quit_script_never_contains_the_target() {
+        let mut app = InstalledApp {
+            path: "/Applications/Evil\" to quit\ndo shell script \"x.app".into(),
+            name: "Evil".into(),
+            bundle_id: Some("com.evil\" \u{ac} do shell script \"touch /tmp/pwned".into()),
+            version: None,
+            executable: None,
+            team_id: None,
+            embedded_ids: vec![],
+            app_groups: vec![],
+            source: AppSource::Other,
+            size: Size::Unknown,
+            is_system: false,
+        };
+        let args = quit_script_args(&app);
+        assert_eq!(
+            args[3], "tell application (item 1 of argv) to quit",
+            "an odd bundle id falls back to the path"
+        );
+        assert_eq!(args.last().unwrap(), &app.path.to_string_lossy());
+        assert!(args[..args.len() - 1]
+            .iter()
+            .all(|a| !a.contains("shell") && !a.contains("Evil")));
+
+        app.bundle_id = Some("com.foo.Bar-2".into());
+        let args = quit_script_args(&app);
+        assert_eq!(args[3], "tell application id (item 1 of argv) to quit");
+        assert_eq!(args.last().unwrap(), "com.foo.Bar-2");
     }
 
     #[test]

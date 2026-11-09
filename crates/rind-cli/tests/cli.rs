@@ -17,7 +17,18 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        let dir = tempfile::tempdir().expect("tempdir");
+        Self::at(tempfile::tempdir().expect("tempdir"))
+    }
+
+    /// 会真进废纸篓的测试用：暂存目录建在真实家目录下，和废纸篓同卷，移动是 rename。
+    fn on_trash_volume() -> Self {
+        let base =
+            PathBuf::from(std::env::var("HOME").expect("HOME")).join("Library/Caches/rind-tests");
+        fs::create_dir_all(&base).unwrap();
+        Self::at(tempfile::tempdir_in(base).expect("tempdir"))
+    }
+
+    fn at(dir: tempfile::TempDir) -> Self {
         // `/var` 是指向 `/private/var` 的符号链接；给 Rind 的路径用盘上的真名，免得保护区检查认不出来。
         let root = dir.path().canonicalize().expect("canonicalize tempdir");
         let home = root.join("Users/tester");
@@ -76,9 +87,7 @@ struct PutBack<'a>(&'a Fixture);
 
 impl Drop for PutBack<'_> {
     fn drop(&mut self) {
-        if self.0.everything_in_place() {
-            return;
-        }
+        // 不只看 App 和残留：清理、移文件的测试也靠它兜底，所以每条没放回的记录都放回。
         let output = self.0.run(&["history", "--json"]);
         let Ok(records) = serde_json::from_slice::<Vec<serde_json::Value>>(&output.stdout) else {
             return;
@@ -373,4 +382,346 @@ fn an_exact_name_with_an_app_suffix_survives_the_no_prompt_rule() {
             "{query}"
         );
     }
+}
+
+/// 写一个 `size` 字节的真文件（非稀疏，占用块数和大小相当）。
+fn write_bytes(path: &Path, size: usize) {
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, vec![7u8; size]).unwrap();
+}
+
+fn paths_of(list: &serde_json::Value, key: usize) -> Vec<PathBuf> {
+    list.as_array()
+        .unwrap()
+        .iter()
+        .map(|pair| PathBuf::from(pair[key].as_str().unwrap()))
+        .collect()
+}
+
+#[test]
+fn status_json_has_disk_and_app_count() {
+    let fx = Fixture::new();
+    let (output, value) = fx.json(&["status", "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let disk = &value["disk"];
+    assert!(disk["total"].as_u64().unwrap() > 0, "{value}");
+    assert!(disk["available"].as_u64().unwrap() <= disk["total"].as_u64().unwrap());
+    assert!(disk["used"].is_u64());
+    assert_eq!(value["apps"].as_u64(), Some(1), "{value}");
+    assert!(value["scan"].is_null(), "{value}");
+
+    let (output, value) = fx.json(&["status", "--scan", "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let scan = &value["scan"];
+    for key in ["orphans", "cleanup"] {
+        for field in [
+            "items",
+            "size",
+            "unknown",
+            "suggested_items",
+            "suggested_size",
+        ] {
+            assert!(scan[key][field].is_u64(), "{key}.{field}: {value}");
+        }
+    }
+    assert!(scan["orphan_groups"].is_u64(), "{value}");
+    assert!(scan["reclaimable"].is_u64(), "{value}");
+    let categories = scan["categories"].as_array().unwrap();
+    assert!(
+        categories.iter().any(|c| c["category"] == "app_caches"),
+        "{value}"
+    );
+}
+
+#[test]
+fn clean_dry_run_lists_app_and_npm_caches_and_moves_nothing() {
+    let fx = Fixture::new();
+    let npm = fx.home.join(".npm/_cacache");
+    write_bytes(&npm.join("index-v5/blob"), 4096);
+    let caches = fx.home.join("Library/Caches/com.rind.fake");
+
+    let (output, value) = fx.json(&["clean", "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let categories: Vec<&str> = value["categories"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|c| c["category"].as_str())
+        .collect();
+    assert!(categories.contains(&"app_caches"), "{value}");
+    assert!(categories.contains(&"package_caches"), "{value}");
+    assert!(value["categories"][0]["explanation"].is_string(), "{value}");
+
+    let (output, value) = fx.json(&["clean", "--dry-run", "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(value["dry_run"], serde_json::Value::Bool(true));
+    let moved = paths_of(&value["moved"], 0);
+    assert!(moved.contains(&caches), "{moved:?}");
+    assert!(moved.contains(&npm), "{moved:?}");
+    assert!(caches.exists() && npm.exists());
+
+    // 只要一类。
+    let (_, value) = fx.json(&[
+        "clean",
+        "--category",
+        "package_caches",
+        "--dry-run",
+        "--json",
+    ]);
+    assert_eq!(paths_of(&value["moved"], 0), vec![npm.clone()], "{value}");
+
+    // 类别名不对：clap 直接拒绝并列出能用的。
+    let output = fx.run(&["clean", "--category", "junk"]);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("app_caches"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn clean_trash_records_cleanup_history_and_restore_puts_it_back() {
+    let fx = Fixture::on_trash_volume();
+    let _guard = PutBack(&fx);
+    let npm = fx.home.join(".npm/_cacache");
+    write_bytes(&npm.join("index-v5/blob"), 4096);
+    let caches = fx.home.join("Library/Caches/com.rind.fake");
+
+    let (output, value) = fx.json(&["clean", "--trash", "--yes", "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(value["dry_run"], serde_json::Value::Bool(false));
+    let moved = paths_of(&value["moved"], 0);
+    assert!(moved.contains(&caches) && moved.contains(&npm), "{moved:?}");
+    assert!(!caches.exists() && !npm.exists());
+    let record_id = value["record_id"].as_str().expect("record id").to_string();
+
+    let (_, history) = fx.json(&["history", "--json"]);
+    assert_eq!(history[0]["id"].as_str(), Some(record_id.as_str()));
+    assert_eq!(history[0]["kind"].as_str(), Some("cleanup"), "{history}");
+    let text = stdout(&fx.run(&["history"]));
+    assert!(text.contains("清理"), "{text}");
+
+    let output = fx.run(&["restore", &record_id]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(caches.exists() && npm.exists(), "both should be back");
+}
+
+#[test]
+fn analyze_sorts_by_size_and_reports_large_files() {
+    let fx = Fixture::new();
+    let dir = fx.home.join("space");
+    write_bytes(&dir.join("big/a.bin"), 3_000_000);
+    write_bytes(&dir.join("mid.bin"), 2_000_000);
+    write_bytes(&dir.join("small/b.txt"), 10_000);
+
+    let (output, value) = fx.json(&[
+        "analyze",
+        dir.to_str().unwrap(),
+        "--depth",
+        "1",
+        "--large-min",
+        "1M",
+        "--json",
+    ]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(value["incomplete"], serde_json::Value::Bool(false));
+    assert!(value["unreadable"].as_array().unwrap().is_empty());
+    let names: Vec<&str> = value["root"]["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["big", "mid.bin", "small"], "{value}");
+    assert_eq!(value["root"]["files"].as_u64(), Some(3));
+    let large: Vec<&str> = value["large_files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["path"].as_str().unwrap())
+        .collect();
+    assert_eq!(large.len(), 2, "{large:?}");
+    assert!(large[0].ends_with("a.bin") && large[1].ends_with("mid.bin"));
+
+    let output = fx.run(&["analyze", dir.to_str().unwrap(), "--depth", "1"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let text = stdout(&output);
+    let at = |s: &str| text.find(s).unwrap_or_else(|| panic!("{s} in {text}"));
+    assert!(
+        at("big/") < at("mid.bin") && at("mid.bin") < at("small/"),
+        "{text}"
+    );
+
+    let output = fx.run(&["analyze", "--large-min", "lots"]);
+    assert!(!output.status.success());
+}
+
+#[test]
+fn trash_refuses_protected_paths_and_can_be_restored() {
+    let fx = Fixture::on_trash_volume();
+    let _guard = PutBack(&fx);
+    let keychains = fx.home.join("Library/Keychains");
+    fs::create_dir_all(&keychains).unwrap();
+    let output = fx.run(&["trash", keychains.to_str().unwrap(), "--yes"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("钥匙串"), "{}", stderr(&output));
+    assert!(keychains.exists());
+
+    let note = fx.home.join("Documents/note.txt");
+    write_bytes(&note, 100);
+    let (output, value) = fx.json(&["trash", note.to_str().unwrap(), "--dry-run", "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(paths_of(&value["moved"], 0), vec![note.clone()]);
+    assert!(note.exists());
+
+    // 一个能动、一个不能：能动的移走，不能的列在 refused 里，退出码 1。
+    let (output, value) = fx.json(&[
+        "trash",
+        note.to_str().unwrap(),
+        keychains.to_str().unwrap(),
+        "--yes",
+        "--json",
+    ]);
+    assert_eq!(output.status.code(), Some(1), "{value}");
+    assert_eq!(paths_of(&value["moved"], 0), vec![note.clone()]);
+    assert_eq!(paths_of(&value["refused"], 0), vec![keychains.clone()]);
+    assert!(!note.exists() && keychains.exists());
+
+    let (_, history) = fx.json(&["history", "--json"]);
+    assert_eq!(history[0]["kind"].as_str(), Some("files"), "{history}");
+    let id = history[0]["id"].as_str().unwrap().to_string();
+    let output = fx.run(&["restore", &id]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(note.exists());
+
+    let output = fx.run(&["trash", fx.home.join("nope").to_str().unwrap(), "--yes"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("不存在"), "{}", stderr(&output));
+}
+
+#[test]
+fn launch_list_shows_a_user_agent_and_explains_what_it_cannot_touch() {
+    let fx = Fixture::new();
+    let plist = |label: &str, program: &str| {
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>{label}</string>
+<key>Program</key><string>{program}</string>
+<key>RunAtLoad</key><true/>
+</dict></plist>"#
+        )
+    };
+    let agents = fx.home.join("Library/LaunchAgents");
+    fs::create_dir_all(&agents).unwrap();
+    let agent = agents.join("com.rind.test.agent.plist");
+    fs::write(
+        &agent,
+        plist("com.rind.test.agent", "/nonexistent/rind-test-agent"),
+    )
+    .unwrap();
+    let global = fx.root.join("Library/LaunchAgents");
+    fs::create_dir_all(&global).unwrap();
+    fs::write(
+        global.join("com.rind.test.global.plist"),
+        plist("com.rind.test.global", "/nonexistent/rind-test-global"),
+    )
+    .unwrap();
+
+    let (output, value) = fx.json(&["launch", "list", "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let item = value
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|i| i["label"] == "com.rind.test.agent")
+        .unwrap_or_else(|| panic!("agent listed: {value}"));
+    assert_eq!(item["domain"].as_str(), Some("user_agent"));
+    assert_eq!(item["plist"].as_str(), agent.to_str());
+    assert_eq!(item["program_exists"], serde_json::Value::Bool(false));
+    assert!(item["status"]["state"].is_string(), "{item}");
+
+    let (_, value) = fx.json(&["launch", "list", "--user", "--json"]);
+    assert!(value
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|i| i["domain"] == "user_agent"));
+
+    let text = stdout(&fx.run(&["launch", "list"]));
+    assert!(text.contains("com.rind.test.agent"), "{text}");
+
+    // 找不到、不能管：在调用 launchctl 之前就说明原因。
+    let output = fx.run(&["launch", "disable", "com.rind.no.such"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stderr(&output).contains("没有 label"),
+        "{}",
+        stderr(&output)
+    );
+    let output = fx.run(&["launch", "disable", "COM.RIND.TEST.GLOBAL"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(stderr(&output).contains("不能操作"), "{}", stderr(&output));
+    let output = fx.run(&["launch", "remove", "com.rind.test.global", "--dry-run"]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(fx
+        .root
+        .join("Library/LaunchAgents/com.rind.test.global.plist")
+        .exists());
+}
+
+#[test]
+fn orphans_json_has_groups_and_selection() {
+    let fx = Fixture::new();
+    let (output, value) = fx.json(&["orphans", "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(value["groups"].is_array(), "{value}");
+    assert!(value["total"].is_u64(), "{value}");
+    assert!(value["selected"].is_array(), "{value}");
+    assert!(value["selected_size"].is_u64(), "{value}");
+
+    // 预演：输出一个移动结果文档（没选中任何东西时退出码 2），什么都不动。
+    let (output, value) = fx.json(&["orphans", "--trash", "--dry-run", "--json"]);
+    assert!(
+        matches!(output.status.code(), Some(0) | Some(2)),
+        "{}",
+        stderr(&output)
+    );
+    assert_eq!(value["dry_run"], serde_json::Value::Bool(true), "{value}");
+    assert!(value["moved"].is_array(), "{value}");
+    assert!(fx.everything_in_place());
+
+    // --path 只能选扫描结果里的。
+    let stranger = fx.home.join("Library/Caches/com.rind.fake");
+    let output = fx.run(&["orphans", "--path", stranger.to_str().unwrap()]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stderr(&output).contains("不在扫描结果里"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn json_without_yes_refuses_for_every_moving_command() {
+    let fx = Fixture::new();
+    let note = fx.home.join("note.txt");
+    write_bytes(&note, 10);
+    for args in [
+        vec!["clean", "--trash", "--json"],
+        vec!["orphans", "--trash", "--json"],
+        vec!["trash", note.to_str().unwrap(), "--json"],
+        vec!["launch", "remove", "com.rind.whatever", "--json"],
+    ] {
+        let (output, value) = fx.json(&args);
+        assert_eq!(output.status.code(), Some(1), "{args:?}");
+        assert!(
+            value["error"].as_str().unwrap().contains("--yes"),
+            "{args:?}: {value}"
+        );
+    }
+    assert!(fx.everything_in_place());
+    assert!(note.exists());
 }

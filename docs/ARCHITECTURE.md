@@ -68,9 +68,74 @@ rind/
    不在保护区、父目录解析后没逃出家目录或 `/Library`、`/Applications`；再用 `renamex_np(RENAME_EXCL)` 放回（原位置已被占用就跳过并说明）；
    跨卷时复制并核对后才删源。逐项记录 `restored`，全部放回后记录才算 restored。
 
+## 统一的移动出口（`remove`）
+
+卸载、孤儿、清理、空间分析、启动项**只有一个**把东西移进废纸篓的地方：`remove::trash_items`（卸载用同一个 `Mover`，只是多了"App 先走"的顺序）。
+它保证第 7 步的全部规则：只认扫描结果里有的路径（`NotInPlan`）、真要动必须有 History（`LedgerRequired`）、每项移动前紧挨着
+`resolve` + `protect::check`、先记 `pending` 意图再移动、写不了 History 就停并带回 `partial`、一批一条记录、什么都没移成不留记录。
+同一批里一个路径在另一个下面时只移外层的。History 记录带 `kind`（`RecordKind`：卸载 / 孤儿 / 清理 / 文件 / 启动项），旧记录按卸载读。
+
+`HoldBack::InUse { app }`：所属程序正在运行（比如开着的浏览器的缓存），不能选，退出后重新扫描。
+
+## 孤儿（`orphans`）
+
+App 已经删了、数据还在。候选与卸载用同一批搜索位置；"主人"全集 = 已安装 App + Apple 自带 App + Spotlight 能找到的所有 App 包
+（含内嵌组件 id、App Group）。任何主人能拿到证据的候选都不是孤儿。剩下的只按强信号报告（`OrphanSignal`）：
+
+- `BundleIdGone`：名字是 bundle id、没有主人用它。厂商前缀也没人用 → likely；同厂商还有 App → possible。
+- `ProgramMissing`：launchd plist 要运行的程序不在了、label 不属于任何主人 → likely。
+- `KnownAppGone`：规则库点名的 App 没装 → likely；Homebrew cask 点名 → possible（cask 数据只是线索）。
+- 普通名字的陌生文件夹**不报**：误报比漏报糟糕得多。
+
+`com.apple.*`、系统目录、保护区一律不报；按推测的主人分组，勾选规则沿用 `LeftoverMatch::suggested()`。
+
+## 清理（`cleanup`）
+
+按 `CleanupCategory` 分类：应用缓存、日志、浏览器缓存（只碰缓存目录，不碰 profile 数据 / Cookies / Safari）、Xcode、包管理器缓存、
+项目构建产物、需要人判断的（Xcode 归档、iOS 设备支持文件、重新下载代价高的缓存）。构建产物必须有旁证文件（`target` 旁边有
+`Cargo.toml`、`node_modules` 旁边有 `package.json`……），项目超过 N 天没动过才建议。"需要人判断的"从不建议。所属程序在运行 → `InUse`。
+
+## 空间（`space`）
+
+对一个目录并行统计实际占用（`st_blocks`），不跟随符号链接、不跨卷、硬链接只算一次；树只留到 `max_depth` 层、每层前 `max_children`
+个，其余折叠成 `Other`，往深处看就对子目录再分析一次。同时收集最大的 N 个大文件。超时或取消时返回**部分结果**并标 `incomplete`，
+读不了的目录列在 `unreadable`、相关节点标 `partial`。根先解析成盘上的真实路径（符号链接、大小写都还原），输出里每个 `path` 都是
+真实路径——移动出口拿它再解析一次，两边必须完全相等。分析 `/` 时把数据卷（firmlink、`/System/Volumes/Data`）当同一个卷，跳过
+`/System/Volumes/Data` 本身，别的卷不进。移动一个目录前紧挨着再做一次「子孙探测」：往下 6 层、最多 20 万个条目（广度优先，
+不跟符号链接），看到照片 / 音乐库或带钱包的浏览器 profile 就整个拒绝；额度用完时放行（浅处的库一定看过，超限的几乎都是
+`node_modules` / `target` 这类）。符号链接只是链接：移走它不会带走它指向的东西，所以保护区里的**裸链接**本身可以移。每个节点都有 `hold_back`，受保护的不能选；**子树里有不能选的东西时，它的每个祖先
+（含根）都标 `Contains { path, why }`**，`path` 指到最近的那个真正挡路者，界面据此禁止勾选整个外层。树里看不到的部分（超过
+`max_depth`、并进 `Other` 的）由走树时的便宜检查补上（照片 / 音乐库、固定保护位置、`com.apple.*`、带钱包的浏览器 profile）。
+没走完就要停（超时 / 取消）时，没来得及核实的节点按 `Protected { Unresolvable }` 处理——宁可多拦，不让没核实过的东西变成可选。
+
+## 启动项（`launch`）
+
+列出 `~/Library/LaunchAgents`、`/Library/LaunchAgents`、`/Library/LaunchDaemons`：label、程序、是否存在、RunAtLoad / KeepAlive、
+所属 App、是否孤儿、运行状态（`/bin/launchctl` 批量查询）。只有当前用户域的项能操作：停用/启用用 `launchctl disable|enable`
+（可逆、不动文件）；移除 = `bootout` 后把 plist 走 `remove`，**卸下来了却没移走（被拒 / 失败 / History 出错）的重新 `bootstrap`
+装回去**，装不回去就在原因里注明 `UNLOADED_NOT_MOVED`。`/Library` 下的是 `NeedsAdmin`，`com.apple.*` 是 `SystemOwned`。
+不收符号链接的 plist；`~/Library/LaunchAgents` 本身或它到家目录之间哪一级是符号链接时整个用户域都不列（免得指向
+`/Library/LaunchAgents` 的链接让全局项冒充成可管理的）。label 按原样读，只有 `[A-Za-z0-9._-]` 组成的才可管理（它会拼进
+`gui/<uid>/<label>`）。动手前（停用/启用、移除的 `bootout` 之前）用 `O_NOFOLLOW` 重新打开 plist 核对：普通文件、≤ 1 MB、
+属主是当前用户、组和其他人不可写、不是深嵌套的炸弹（与 Info.plist 共用 `apps::plist_is_tame`）、盘上的 `Label` 与扫描时相同、
+程序也没换；任何一点不符就报错，不调用 launchctl。核对时记下这份文件的身份（设备 + inode + 大小 + mtime / ctime + 内容哈希），
+调用 launchctl 前、`bootout` 之后、以及真正 `rename` 之前各比一次，变了就不移动（`CHANGED_AT_MOVE`）并把卸下来的装回去。程序在不在：
+读不了（EACCES / EPERM）的按在，`/Volumes/...` 下的按在。launchctl 抽象成可注入的接口，测试从不调用真实的 launchctl。
+
+## 磁盘（`disk`）
+
+`disk::usage(path)` 用 `statfs` 取所在卷的总量与可用量，给总览页的容量条。
+
 ## 线程与界面
 
 core 是同步 API + rayon；CLI 直接调用；GPUI 应用在 `background_executor` 里跑扫描，用 `ScanProgress` 回调刷新界面。core 的类型都 `Send + Sync + Clone + Serialize`，CLI 的 `--json` 和 GUI 都直接用。
+
+## 预演与真跑一致（`--dry-run`）
+
+预演不是"只看扫描结果"：它和真跑一样解析真实路径、一样做子孙探测，外层被拒时内层同样重新单独排一遍（`nest` 之后），
+所以 `moved` 和 `freed` 和真跑对得上。
+`--dry-run --json` 里 `moved` 会移动的、`refused` 会拒绝的，真跑给出的就是同一份——给 agent 按预演做决定用。
+唯一的差别是预演不写 History、不碰 launchctl、不动任何文件。
 
 ## 测试
 

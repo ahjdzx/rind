@@ -5411,6 +5411,7 @@ dependencies = [
  "chrono",
  "futures",
  "gpui-kit",
+ "plist",
  "rind-core",
  "rind-i18n",
 ]
@@ -5460,6 +5461,7 @@ version = "0.1.0"
 dependencies = [
  "rind-core",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

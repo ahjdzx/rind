@@ -96,12 +96,8 @@ fn check_resolved(env: &Env, real: &Path) -> Option<ProtectReason> {
     // 照片 / 音乐库按扩展名认，不管放在哪。
     for part in real.components() {
         if let Component::Normal(name) = part {
-            let name = name.to_string_lossy().to_lowercase();
-            if name.ends_with(".photoslibrary") || name.ends_with(".aplibrary") {
-                return Some(ProtectReason::PhotoLibrary);
-            }
-            if name.ends_with(".musiclibrary") || name.ends_with(".tvlibrary") {
-                return Some(ProtectReason::MusicLibrary);
+            if let Some(reason) = media_library(name) {
+                return Some(reason);
             }
         }
     }
@@ -129,6 +125,78 @@ fn check_resolved(env: &Env, real: &Path) -> Option<ProtectReason> {
         return Some(ProtectReason::Wallet);
     }
 
+    None
+}
+
+/// 照片 / 音乐 / TV 库的包名后缀（比较时不区分大小写）。
+const PHOTO_LIBRARY_SUFFIXES: &[&str] = &[
+    ".photoslibrary",
+    ".photolibrary",
+    ".migratedphotolibrary",
+    ".aplibrary",
+];
+const MUSIC_LIBRARY_SUFFIXES: &[&str] = &[".musiclibrary", ".tvlibrary"];
+
+/// 这个名字是照片库或音乐库的包吗？
+fn media_library(name: &std::ffi::OsStr) -> Option<ProtectReason> {
+    let name = name.to_string_lossy().to_lowercase();
+    if PHOTO_LIBRARY_SUFFIXES.iter().any(|s| name.ends_with(s)) {
+        return Some(ProtectReason::PhotoLibrary);
+    }
+    if MUSIC_LIBRARY_SUFFIXES.iter().any(|s| name.ends_with(s)) {
+        return Some(ProtectReason::MusicLibrary);
+    }
+    None
+}
+
+/// 子孙探测往下最多看几层。
+const DESCENDANT_DEPTH: u8 = 6;
+/// 子孙探测最多看多少个条目。
+const DESCENDANT_LIMIT: usize = 200_000;
+
+/// 移动一个目录前紧挨着问：它里面（往下 6 层、最多 20 万个条目，不跟符号链接）有没有照片 / 音乐库，
+/// 或装了钱包扩展的浏览器 profile？有就按受保护处理——整个目录移走会把它们一起带走。
+/// `check` 只看路径本身和它的祖先，扫描时每个候选都要跑，所以不在那里做这么深的查找。
+///
+/// 看不完（超过上限）时放行，和 `check` 里钱包的 fail closed 不同，理由：
+/// - 超限的几乎都是 `node_modules`、`target`、大缓存，一律拦下会让清理基本不能用；
+/// - 按层（广度优先）看，浅处的库在额度用完前一定会被看到；照片库是用户手动放的整包，
+///   埋在二十万个条目后面的可能性很小；
+/// - 钱包仍由 `check` 的规则兜底（4 层内、超限按有钱包处理），那条规则不变。
+pub fn check_descendants(path: &Path) -> Option<ProtectReason> {
+    probe_descendants(path, DESCENDANT_DEPTH, DESCENDANT_LIMIT)
+}
+
+fn probe_descendants(path: &Path, depth: u8, limit: usize) -> Option<ProtectReason> {
+    let mut level = vec![path.to_path_buf()];
+    let mut seen = 0usize;
+    for _ in 0..depth {
+        let mut next = Vec::new();
+        for dir in &level {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                seen += 1;
+                if seen > limit {
+                    return None;
+                }
+                // `DirEntry::file_type` 不跟符号链接：链接只是链接，移走它不会带走它指向的库。
+                if !entry.file_type().is_ok_and(|t| t.is_dir()) {
+                    continue;
+                }
+                if let Some(reason) = media_library(&entry.file_name()) {
+                    return Some(reason);
+                }
+                let child = entry.path();
+                if profile_has_wallet(&child) {
+                    return Some(ProtectReason::Wallet);
+                }
+                next.push(child);
+            }
+        }
+        level = next;
+    }
     None
 }
 
@@ -911,6 +979,64 @@ mod tests {
             subtree_has_wallet(&huge, WALLET_SEARCH_DEPTH, &mut seen),
             Probe::TooBig
         ));
+    }
+
+    #[test]
+    fn libraries_and_wallets_deep_inside_a_folder_are_found() {
+        let (_d, env) = env();
+        let cache = env.user_library.join("Caches/com.foo");
+        fs::create_dir_all(cache.join("a/b/c/d/Old.photolibrary")).unwrap();
+        assert_eq!(check_descendants(&cache), Some(PhotoLibrary));
+        assert_eq!(
+            check(&env, &cache),
+            None,
+            "the scan-time check does not walk this deep"
+        );
+
+        let music = env.user_library.join("Caches/com.bar");
+        fs::create_dir_all(music.join("x/Music Library.musiclibrary")).unwrap();
+        assert_eq!(check_descendants(&music), Some(MusicLibrary));
+
+        let wallet = env.user_library.join("Caches/com.baz");
+        fs::create_dir_all(
+            wallet.join("a/b/c/Profile/Local Extension Settings/nkbihfbeogaeaoehlefnkodbefgpgknn"),
+        )
+        .unwrap();
+        assert_eq!(check_descendants(&wallet), Some(Wallet));
+
+        let clean = env.user_library.join("Caches/com.clean");
+        fs::create_dir_all(clean.join("a/b")).unwrap();
+        fs::write(clean.join("a/not-a.photoslibrary"), b"").unwrap();
+        assert_eq!(check_descendants(&clean), None, "a file is not a library");
+
+        // 链接指向库：移走链接不会带走库。
+        std::os::unix::fs::symlink(
+            cache.join("a/b/c/d/Old.photolibrary"),
+            clean.join("link.photoslibrary"),
+        )
+        .unwrap();
+        assert_eq!(check_descendants(&clean), None);
+
+        let deep = env.user_library.join("Caches/com.deep");
+        fs::create_dir_all(deep.join("1/2/3/4/5/6/Too Deep.photoslibrary")).unwrap();
+        assert_eq!(check_descendants(&deep), None, "past the depth limit");
+    }
+
+    #[test]
+    fn a_huge_tree_without_a_library_passes_the_descendant_probe() {
+        // 看不完的大目录（node_modules、target）放行；浅处的库在额度用完前就被看到。
+        let (_d, env) = env();
+        let modules = env.user_library.join("Caches/com.foo/node_modules");
+        for i in 0..50 {
+            fs::create_dir_all(modules.join(format!("pkg{i}/lib"))).unwrap();
+        }
+        assert_eq!(probe_descendants(&modules, DESCENDANT_DEPTH, 20), None);
+        fs::create_dir_all(modules.parent().unwrap().join("Photos.photoslibrary")).unwrap();
+        assert_eq!(
+            probe_descendants(modules.parent().unwrap(), DESCENDANT_DEPTH, 20),
+            Some(PhotoLibrary),
+            "breadth first: the shallow library is seen before the budget runs out"
+        );
     }
 
     #[test]

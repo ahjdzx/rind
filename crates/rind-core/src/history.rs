@@ -255,23 +255,7 @@ fn validate(env: &Env, item: &HistoryItem) -> Result<(), String> {
     if !is_a_trash(env, &trashed_parent) {
         return Err(format!("{} is not in the Trash", item.trashed.display()));
     }
-    if !item.original.is_absolute()
-        || item
-            .original
-            .components()
-            .any(|c| c == std::path::Component::ParentDir)
-    {
-        return Err(format!(
-            "{} is not a plain absolute path",
-            item.original.display()
-        ));
-    }
-    let expected = expected_location(env, &item.original).ok_or_else(|| {
-        format!(
-            "{} is outside the places Rind knows",
-            item.original.display()
-        )
-    })?;
+    let expected = expected_or_err(env, &item.original)?;
     let real = protect::resolve(env, &item.original).map_err(|_| {
         format!(
             "{} leads somewhere else on disk (it does not resolve)",
@@ -318,9 +302,39 @@ fn is_a_trash(env: &Env, dir: &Path) -> bool {
         && parts[4] == unsafe { libc::getuid() }.to_string()
 }
 
+/// History 能不能把 `path` 放回去：和放回时 `validate` 用同一套位置规则（`expected_location`）。
+/// 移动前就要问：放不回来的东西不该进废纸篓。
+pub fn restorable(env: &Env, path: &Path) -> Result<(), String> {
+    expected_or_err(env, path).map(|_| ())
+}
+
+fn expected_or_err(env: &Env, original: &Path) -> Result<PathBuf, String> {
+    if !original.is_absolute()
+        || original
+            .components()
+            .any(|c| c == std::path::Component::ParentDir)
+    {
+        return Err(format!(
+            "{} is not a plain absolute path",
+            original.display()
+        ));
+    }
+    expected_location(env, original)
+        .ok_or_else(|| format!("{} is outside the places Rind knows", original.display()))
+}
+
 /// 把 `original` 通过它所在的根换算成盘上应有的位置：根解析后再接上剩下的部分。不在任何已知根下 → None。
-fn expected_location(env: &Env, original: &Path) -> Option<PathBuf> {
-    let mut roots: Vec<&Path> = vec![&env.home, &env.system_library, &env.receipts_dir];
+///
+/// 认的根：家目录、`/Library`、收据目录、App 目录、Homebrew 前缀、`/Users/Shared`，以及外置卷 `/Volumes/<卷名>`。
+/// - `/Users/Shared` 本来就人人可写，往里放回东西不会给谁多出权限。
+/// - `/Volumes/<卷名>` 只认真正挂在那儿的目录：`/Volumes/Macintosh HD` 是指向 `/` 的符号链接，跟着它走
+///   就能把东西"放回"启动盘上任何地方，所以卷根是符号链接（或不是目录）一律不认；卷根本身也不算。
+///
+/// 保护区和"父目录解析后没逃出这个根"由调用方（`validate`、`remove`）照旧再查。
+pub(crate) fn expected_location(env: &Env, original: &Path) -> Option<PathBuf> {
+    let system_root = env.system_library.parent().unwrap_or(Path::new("/"));
+    let shared = system_root.join("Users/Shared");
+    let mut roots: Vec<&Path> = vec![&env.home, &env.system_library, &env.receipts_dir, &shared];
     roots.extend(env.app_dirs.iter().map(PathBuf::as_path));
     if let Some(prefix) = &env.homebrew_prefix {
         roots.push(prefix);
@@ -333,10 +347,32 @@ fn expected_location(env: &Env, original: &Path) -> Option<PathBuf> {
             return Some(real_root.join(rest));
         }
     }
-    None
+
+    let volumes = system_root.join("Volumes");
+    let rest = original.strip_prefix(&volumes).ok()?;
+    let mut parts = rest.components();
+    let Some(std::path::Component::Normal(name)) = parts.next() else {
+        return None;
+    };
+    let inside = parts.as_path();
+    if inside.as_os_str().is_empty() {
+        return None;
+    }
+    let volume = volumes.join(name);
+    let is_mount_dir = fs::symlink_metadata(&volume).is_ok_and(|m| m.is_dir());
+    if !is_mount_dir {
+        return None;
+    }
+    let real_volume = protect::resolve(env, &volume).ok()?;
+    let real_volumes = protect::resolve(env, &volumes).ok()?;
+    if !same_place(real_volume.parent()?, &real_volumes) {
+        return None;
+    }
+    Some(real_volume.join(inside))
 }
 
-fn same_place(a: &Path, b: &Path) -> bool {
+/// 两条已解析的路径是不是同一个地方（APFS 不区分大小写）。
+pub(crate) fn same_place(a: &Path, b: &Path) -> bool {
     let a: Vec<String> = a
         .components()
         .map(|c| c.as_os_str().to_string_lossy().to_lowercase())
@@ -352,12 +388,13 @@ fn same_place(a: &Path, b: &Path) -> bool {
 mod tests {
     use super::*;
     use crate::trash::testing::{scratch, PutBack};
-    use crate::{Size, Source};
+    use crate::{RecordKind, Size, Source};
 
     fn record(id: &str, items: Vec<HistoryItem>) -> HistoryRecord {
         HistoryRecord {
             id: id.to_string(),
             at: chrono::Utc::now(),
+            kind: RecordKind::Uninstall,
             app_name: "Foo".to_string(),
             bundle_id: Some("com.foo.bar".to_string()),
             source: Source::Cli,

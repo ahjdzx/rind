@@ -2,18 +2,28 @@
 
 mod app;
 mod apps_page;
+mod cleanup_page;
 mod demo;
 mod history_page;
+mod icons;
+mod launch_page;
+mod model;
+mod orphans_page;
+mod overview_page;
 mod services;
 mod settings_page;
+mod space_page;
+mod store;
 mod strings;
+mod ui;
 
 use std::sync::Arc;
 
 use gpui_kit::*;
 
 use crate::app::RindApp;
-use crate::services::Services;
+use crate::services::{CleanupPrefs, Services};
+use crate::settings_page::Appearance;
 use crate::strings::LangSetting;
 
 actions!(rind, [Quit]);
@@ -26,6 +36,8 @@ fn main() {
     app.run(move |cx| {
         gpui_kit::init(cx);
         cx.set_global(LangSetting::new(services.default_lang()));
+        cx.set_global(CleanupPrefs::default());
+        cx.set_global(Appearance::default());
 
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
         cx.on_action(|_: &Quit, cx: &mut App| cx.quit());
@@ -37,7 +49,8 @@ fn main() {
         .detach();
 
         let options = WindowOptions {
-            window_bounds: Some(WindowBounds::centered(size(px(1120.), px(720.)), cx)),
+            window_bounds: Some(WindowBounds::centered(size(px(1200.), px(780.)), cx)),
+            window_min_size: Some(size(px(980.), px(640.))),
             titlebar: Some(TitlebarOptions {
                 title: Some("Rind".into()),
                 ..Default::default()

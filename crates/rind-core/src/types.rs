@@ -103,6 +103,23 @@ pub enum EvidenceKind {
     Receipt,
     /// 规则库命中。
     Rule { rule: String },
+    /// 孤儿：没有任何已安装的 App 认领它，`signal` 说明凭什么认定主人已经不在了。
+    Orphan { signal: OrphanSignal },
+}
+
+/// 认定"主人已经不在了"的依据。
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OrphanSignal {
+    /// 名字是一个 bundle id，盘上找不到任何 App 用这个 id（也不是它包内的组件）。
+    BundleIdGone,
+    /// launchd plist 要运行的程序已经不存在了。
+    ProgramMissing,
+    /// 规则库或 Homebrew cask 点名了它，但对应的 App 没装。
+    KnownAppGone,
+    /// 只有名字像某个 App 的数据，找不到对应的 App。
+    /// 目前不产出（普通名字的陌生文件夹误报太多，一律不报）；留着是为了读得懂旧数据。
+    NameGone,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -180,6 +197,10 @@ pub enum HoldBack {
     NeedsAdmin,
     /// 是 macOS 自己的东西。不能选。
     SystemOwned,
+    /// 它所属的程序正在运行（如浏览器开着时的缓存）。退出后重新扫描才能选。
+    InUse { app: String },
+    /// 自己能动，但里面有不能动的东西（照片库、钱包、别人在用的……）。整个移走会把它们一起带走，所以不能选。
+    Contains { path: PathBuf, why: Box<HoldBack> },
 }
 
 impl HoldBack {
@@ -300,11 +321,30 @@ pub struct RemovalOutcome {
     pub dry_run: bool,
 }
 
+/// 一条 History 记录是哪种操作留下的。旧记录没有这个字段，按卸载读。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RecordKind {
+    #[default]
+    Uninstall,
+    /// 清理孤儿残留。
+    Orphans,
+    /// 清理缓存、日志、开发产物。
+    Cleanup,
+    /// 空间分析里手动选的文件和文件夹。
+    Files,
+    /// 移除启动项。
+    LaunchItems,
+}
+
 /// History 里的一条记录。
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HistoryRecord {
     pub id: String,
     pub at: chrono::DateTime<chrono::Utc>,
+    #[serde(default)]
+    pub kind: RecordKind,
+    /// 卸载时是 App 名；其它操作是给人看的一句标题（如"缓存清理"、某个孤儿的推测名）。
     pub app_name: String,
     pub bundle_id: Option<String>,
     pub source: Source,

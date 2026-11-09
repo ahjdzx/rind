@@ -1,5 +1,6 @@
 //! `rind`：Rind 的命令行。每个子命令都是 rind-core 的薄封装；移动前一定先问，`--dry-run` 只看不动。
 
+mod maintain;
 mod render;
 
 use std::io::{self, BufRead, Write};
@@ -79,6 +80,118 @@ enum Command {
     },
     /// Rind 永远不动的地方。
     Protected,
+    /// 总览：磁盘容量、可卸载的 App 数；加 --scan 再汇总孤儿残留和可清理的空间。给 AI agent 用。
+    Status {
+        /// 再扫一遍孤儿残留和可清理的东西，算出能释放多少。慢一些。
+        #[arg(long)]
+        scan: bool,
+    },
+    /// 已删除的 App 留下的孤儿残留。默认只看；加 --trash 才移动。
+    Orphans {
+        #[command(flatten)]
+        choose: Choose,
+        #[command(flatten)]
+        confirm: Confirm,
+    },
+    /// 缓存、日志、包管理器缓存、项目构建产物。默认只看；加 --trash 才移动。
+    Clean {
+        /// 只看这些类别：app_caches、logs、browser_caches、xcode、package_caches、dev_artifacts、needs_review。
+        #[arg(long = "category", value_name = "C", value_parser = maintain::parse_category)]
+        categories: Vec<rind_core::cleanup::CleanupCategory>,
+        /// 到这些目录下找项目构建产物（默认 ~/work、~/Projects、~/Developer 等）。
+        #[arg(long = "project-root", value_name = "DIR")]
+        project_roots: Vec<String>,
+        /// 项目多少天没动过，它的构建产物才建议清理（默认 30）。
+        #[arg(long, value_name = "DAYS")]
+        min_age: Option<u32>,
+        #[command(flatten)]
+        choose: Choose,
+        #[command(flatten)]
+        confirm: Confirm,
+    },
+    /// 一个目录下什么最占地方，以及大文件清单。只看，不动。
+    Analyze {
+        /// 要分析的目录，默认家目录。
+        path: Option<String>,
+        /// 树显示几层。
+        #[arg(long, default_value_t = 2)]
+        depth: usize,
+        /// 每层列出最大的几项；大文件清单也只列这么多。
+        #[arg(long, default_value_t = 20)]
+        top: usize,
+        /// 多大算大文件，如 500M、2G（默认 100M）。
+        #[arg(long, value_name = "SIZE", value_parser = maintain::parse_size)]
+        large_min: Option<u64>,
+    },
+    /// 把任意文件或文件夹移进废纸篓，记进 History，能放回。保护区里的不动。
+    Trash {
+        /// 要移走的路径。
+        #[arg(required = true, value_name = "PATH")]
+        paths: Vec<String>,
+        #[command(flatten)]
+        confirm: Confirm,
+    },
+    /// 登录启动项与后台任务（LaunchAgents / LaunchDaemons）。
+    Launch {
+        #[command(subcommand)]
+        action: LaunchAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum LaunchAction {
+    /// 列出全部启动项。只看，不动。
+    List {
+        /// 只列孤儿（没有主人、程序也不在了）。
+        #[arg(long)]
+        orphans: bool,
+        /// 只列当前用户的（~/Library/LaunchAgents）。
+        #[arg(long)]
+        user: bool,
+    },
+    /// 停用一个当前用户的启动项（可逆，不动文件）。
+    Disable {
+        /// 启动项的 label，不分大小写，要完整。
+        label: String,
+    },
+    /// 重新启用一个停用了的启动项。
+    Enable {
+        /// 启动项的 label，不分大小写，要完整。
+        label: String,
+    },
+    /// 停下启动项并把它的 plist 移进废纸篓。
+    Remove {
+        /// 启动项的 label，不分大小写，要完整。
+        #[arg(required = true)]
+        labels: Vec<String>,
+        #[command(flatten)]
+        confirm: Confirm,
+    },
+}
+
+/// 会移动东西的子命令共用：预演、不问。
+#[derive(Args)]
+struct Confirm {
+    /// 只说会做什么，不动任何东西。
+    #[arg(long)]
+    dry_run: bool,
+    /// 不问，直接做。
+    #[arg(short = 'y', long)]
+    yes: bool,
+}
+
+/// 孤儿、清理共用：移不移、移哪些。
+#[derive(Args)]
+struct Choose {
+    /// 移到废纸篓（默认是 Rind 建议的那些）。
+    #[arg(long)]
+    trash: bool,
+    /// 全部能选的都算上，不只 Rind 建议的。保护区里的仍然不动。
+    #[arg(long, conflicts_with = "paths")]
+    all: bool,
+    /// 只要这些路径（必须在扫描结果里），可给多次。
+    #[arg(long = "path", value_name = "PATH")]
+    paths: Vec<String>,
 }
 
 #[derive(Args)]
@@ -263,6 +376,31 @@ fn run(command: Command, out: &Render) -> Result<ExitCode> {
             out.protected(&env, &protect::protected_roots(&env));
             Ok(ExitCode::SUCCESS)
         }
+        Command::Status { scan } => maintain::status(&env, out, scan),
+        Command::Orphans { choose, confirm } => maintain::orphans(&env, out, &choose, &confirm),
+        Command::Clean {
+            categories,
+            project_roots,
+            min_age,
+            choose,
+            confirm,
+        } => maintain::clean(
+            &env,
+            out,
+            categories,
+            &project_roots,
+            min_age,
+            &choose,
+            &confirm,
+        ),
+        Command::Analyze {
+            path,
+            depth,
+            top,
+            large_min,
+        } => maintain::analyze(&env, out, path.as_deref(), depth, top, large_min),
+        Command::Trash { paths, confirm } => maintain::trash(&env, out, &paths, &confirm),
+        Command::Launch { action } => maintain::launch(&env, out, action),
     }
 }
 

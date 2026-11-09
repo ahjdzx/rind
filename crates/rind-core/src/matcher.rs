@@ -356,7 +356,7 @@ fn is_apple_name(name: &str) -> bool {
 }
 
 /// 去掉 `.plist` / `.savedState` 这类说明种类的后缀，和 ByHost 的 `.<UUID>`。
-fn candidate_stem(name: &str) -> String {
+pub(crate) fn candidate_stem(name: &str) -> String {
     const SUFFIXES: [&str; 17] = [
         ".plist",
         ".savedState",
@@ -444,7 +444,7 @@ fn vendor_of(bundle_id: &str) -> Option<String> {
 const GENERIC_VENDORS: [&str; 4] = ["com.electron", "com.github", "io.github", "org.electron"];
 
 /// `id.<suffix>` 里说明还是它自己的那些 suffix。
-const HELPER_SUFFIXES: [&str; 29] = [
+pub(crate) const HELPER_SUFFIXES: [&str; 29] = [
     "helper",
     "helpers",
     "renderer",
@@ -490,7 +490,11 @@ const STOP_NAMES: [&str; 16] = [
 /// launchd plist 运行的程序：`Program`，否则 `ProgramArguments[0]`。超过 1 MB 的文件不读。
 pub(crate) fn launchd_program(plist_path: &Path) -> Option<PathBuf> {
     let value = crate::apps::read_plist_bounded(plist_path)?;
-    let dict = value.as_dictionary()?;
+    launchd_program_in(value.as_dictionary()?)
+}
+
+/// 同上，给已经解析好的 plist 用（启动项管理还要读别的键，不想读两遍文件）。
+pub(crate) fn launchd_program_in(dict: &plist::Dictionary) -> Option<PathBuf> {
     if let Some(program) = dict.get("Program").and_then(|v| v.as_string()) {
         return Some(program.into());
     }

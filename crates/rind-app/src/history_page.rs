@@ -1,29 +1,44 @@
-//! 历史页：Rind 移走过什么，一键放回。
+//! 历史页：Rind 移走过什么（卸载、孤儿、缓存、文件、启动项），展开看每一项，一键放回。
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
+use gpui_kit::assets::IconName;
 use gpui_kit::base::StyledExt as _;
-use gpui_kit::component::button::Button;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::notification::Notification;
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
-    h_flex, v_flex, ActiveTheme as _, Disableable as _, Icon, IconName, Sizable as _,
-    WindowExt as _,
+    h_flex, v_flex, ActiveTheme as _, Disableable as _, Icon, Sizable as _, WindowExt as _,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rind_core::RestoreOutcome;
+use rind_core::{RecordKind, RestoreOutcome};
 
 use crate::services::{HistoryRow, Services};
-use crate::strings::{self, ui, Key, LangSetting};
+use crate::strings::{self, ui, Key, Lang, LangSetting};
+use crate::ui::{self, Tone};
+
+fn kind_tag(lang: Lang, kind: RecordKind) -> Tag {
+    let tag = match kind {
+        RecordKind::Uninstall => Tag::info(),
+        RecordKind::Orphans => Tag::warning(),
+        RecordKind::Cleanup => Tag::success(),
+        RecordKind::Files => Tag::secondary(),
+        RecordKind::LaunchItems => Tag::danger(),
+    };
+    tag.xsmall()
+        .child(rind_i18n::describe_record_kind(lang, kind))
+}
 
 pub struct HistoryPage {
     services: Arc<Services>,
     rows: Vec<HistoryRow>,
     loading: bool,
     error: Option<SharedString>,
+    expanded: HashSet<String>,
     /// 正在放回的那条记录。
     restoring: Option<String>,
     _subscriptions: Vec<Subscription>,
@@ -37,6 +52,7 @@ impl HistoryPage {
             rows: Vec::new(),
             loading: false,
             error: None,
+            expanded: HashSet::new(),
             restoring: None,
             _subscriptions: subscriptions,
         };
@@ -117,93 +133,161 @@ impl HistoryPage {
         self.refresh(cx);
     }
 
-    fn render_row(&self, row: &HistoryRow, cx: &mut Context<Self>) -> impl IntoElement {
-        let lang = strings::lang(cx);
-        let id = row.id.clone();
+    fn render_row(&self, row: &HistoryRow, lang: Lang, cx: &mut Context<Self>) -> impl IntoElement {
+        let muted = ui::muted(cx);
+        let expanded = self.expanded.contains(&row.id);
+        let toggle_id = row.id.clone();
+        let restore_id = row.id.clone();
         let meta = format!(
             "{}  ·  {}  ·  {}",
             row.when,
-            strings::item_count(lang, row.items),
+            strings::item_count(lang, row.items.len()),
             row.size
         );
-        h_flex()
-            .gap_3()
-            .p_3()
-            .rounded(cx.theme().radius)
-            .border_1()
-            .border_color(cx.theme().border)
-            .child(
-                v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .child(div().font_semibold().truncate().child(row.app_name.clone()))
+        let action = if row.restored {
+            Tag::secondary()
+                .xsmall()
+                .child(ui(lang, Key::Restored))
+                .into_any_element()
+        } else {
+            let restoring = self.restoring.as_deref() == Some(row.id.as_str());
+            Button::new(SharedString::from(format!("restore-{}", row.id)))
+                .small()
+                .outline()
+                .icon(Icon::new(IconName::Undo2))
+                .label(ui(lang, Key::Restore))
+                .loading(restoring)
+                .disabled(self.restoring.is_some())
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.restore(restore_id.clone(), window, cx)
+                }))
+                .into_any_element()
+        };
+        let header =
+            h_flex()
+                .gap_3()
+                .px_4()
+                .py_3()
+                .child(
+                    h_flex()
+                        .id(SharedString::from(format!("history-{}", row.id)))
+                        .flex_1()
+                        .min_w_0()
+                        .gap_3()
+                        .cursor_pointer()
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            if !this.expanded.remove(&toggle_id) {
+                                this.expanded.insert(toggle_id.clone());
+                            }
+                            cx.notify();
+                        }))
+                        .child(
+                            Icon::new(if expanded {
+                                IconName::ChevronDown
+                            } else {
+                                IconName::ChevronRight
+                            })
+                            .small()
+                            .text_color(muted),
+                        )
+                        .child(
+                            v_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .gap_0p5()
+                                .child(h_flex().gap_2().child(kind_tag(lang, row.kind)).child(
+                                    div().font_semibold().truncate().child(row.title.clone()),
+                                ))
+                                .child(div().text_xs().text_color(muted).child(meta)),
+                        ),
+                )
+                .child(action);
+        let items = expanded.then(|| {
+            v_flex().children(row.items.iter().map(|item| {
+                h_flex()
+                    .gap_3()
+                    .pl(px(44.))
+                    .pr_4()
+                    .py_1p5()
+                    .border_t_1()
+                    .border_color(cx.theme().border)
+                    .text_sm()
                     .child(
                         div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(meta),
-                    ),
-            )
-            .map(|this| {
-                if row.restored {
-                    this.child(Tag::secondary().xsmall().child(ui(lang, Key::Restored)))
-                } else {
-                    let restoring = self.restoring.as_deref() == Some(row.id.as_str());
-                    this.child(
-                        Button::new(ElementId::from((
-                            ElementId::from("restore"),
-                            row.id.clone(),
-                        )))
-                        .small()
-                        .outline()
-                        .icon(Icon::new(IconName::Undo2))
-                        .label(ui(lang, Key::Restore))
-                        .loading(restoring)
-                        .disabled(self.restoring.is_some())
-                        .on_click(cx.listener(
-                            move |this, _, window, cx| this.restore(id.clone(), window, cx),
-                        )),
+                            .flex_1()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .text_ellipsis_middle()
+                            .when(item.restored || item.pending, |this| this.text_color(muted))
+                            .child(item.original.clone()),
                     )
-                }
-            })
+                    .when(item.restored, |this| {
+                        this.child(Tag::secondary().xsmall().child(ui(lang, Key::Restored)))
+                    })
+                    .when(item.pending, |this| {
+                        this.child(Tag::warning().xsmall().child(ui(lang, Key::HistoryPending)))
+                    })
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .w(px(84.))
+                            .text_right()
+                            .text_color(muted)
+                            .child(item.size.clone()),
+                    )
+            }))
+        });
+        ui::card(cx).overflow_hidden().child(header).children(items)
     }
 }
 
 impl Render for HistoryPage {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let lang = strings::lang(cx);
-        let muted = cx.theme().muted_foreground;
-        let rows: Vec<HistoryRow> = self.rows.clone();
+        let header = ui::page_header(
+            IconName::ArchiveRestore,
+            ui(lang, Key::NavHistory),
+            ui(lang, Key::HistorySubtitle),
+            Button::new("history-refresh")
+                .small()
+                .ghost()
+                .icon(Icon::new(IconName::RefreshCw))
+                .label(ui(lang, Key::Refresh))
+                .disabled(self.loading)
+                .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
+            cx,
+        );
+        let rows = self.rows.clone();
         v_flex()
             .size_full()
-            .p_4()
-            .gap_3()
-            .child(
-                div()
-                    .text_xl()
-                    .font_bold()
-                    .child(ui(lang, Key::HistoryTitle)),
-            )
+            .child(header)
             .when_some(self.error.clone(), |this, error| {
-                this.child(div().text_sm().text_color(cx.theme().danger).child(error))
+                this.child(div().px_6().pb_3().child(ui::banner(
+                    Tone::Danger,
+                    IconName::TriangleAlert,
+                    error,
+                    cx,
+                )))
             })
             .map(|this| {
                 if self.loading && rows.is_empty() {
                     this.child(
                         h_flex()
+                            .px_6()
                             .gap_2()
                             .text_sm()
-                            .text_color(muted)
+                            .text_color(ui::muted(cx))
                             .child(Spinner::new().small())
                             .child(ui(lang, Key::HistoryLoading)),
                     )
                 } else if rows.is_empty() {
-                    this.child(
-                        div()
-                            .text_sm()
-                            .text_color(muted)
-                            .child(ui(lang, Key::HistoryEmpty)),
-                    )
+                    this.child(ui::empty_state(
+                        IconName::ArchiveRestore,
+                        ui(lang, Key::HistoryEmpty),
+                        ui(lang, Key::HistoryEmptyBody),
+                        cx,
+                    ))
                 } else {
                     this.child(
                         div()
@@ -212,10 +296,9 @@ impl Render for HistoryPage {
                             .min_h_0()
                             .overflow_y_scrollbar()
                             .child(
-                                v_flex()
-                                    .gap_2()
-                                    .pr_2()
-                                    .children(rows.iter().map(|row| self.render_row(row, cx))),
+                                v_flex().px_6().pb_6().gap_3().children(
+                                    rows.iter().map(|row| self.render_row(row, lang, cx)),
+                                ),
                             ),
                     )
                 }

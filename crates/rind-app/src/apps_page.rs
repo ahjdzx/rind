@@ -1,6 +1,7 @@
 //! 应用页：左栏选 App，右栏看它留下了什么、选哪些、移到废纸篓。
 
-use std::path::Path;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -11,20 +12,21 @@ use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::list::{List, ListDelegate, ListEvent, ListItem, ListState};
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::progress::Progress;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::table::{Column, DataTable, TableDelegate, TableState};
 use gpui_kit::component::tag::Tag;
 use gpui_kit::component::{
-    h_flex, v_flex, ActiveTheme as _, Disableable as _, Icon, IconName, IndexPath, Sizable as _,
+    h_flex, v_flex, ActiveTheme as _, Disableable as _, Icon, IndexPath, Sizable as _,
     WindowExt as _,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use rind_core::{Confidence, RemovalOutcome, ScanProgress, Selection, Size};
+use rind_core::{RemovalOutcome, ScanProgress, Selection, Size};
 
 use crate::services::{AppEntry, ExecuteFailure, PlanView, Services, SourceKind};
+use crate::store::Scans;
 use crate::strings::{self, ui, Key, Lang, LangSetting};
+use crate::ui::{self as kit, Tone};
 
 fn source_label(lang: Lang, source: SourceKind) -> &'static str {
     match source {
@@ -40,6 +42,8 @@ pub struct AppList {
     visible: Vec<usize>,
     query: String,
     lang: Lang,
+    /// 已经转好的图标（App id → PNG）。
+    icons: HashMap<SharedString, PathBuf>,
 }
 
 impl AppList {
@@ -49,6 +53,7 @@ impl AppList {
             visible: Vec::new(),
             query: String::new(),
             lang,
+            icons: HashMap::new(),
         }
     }
 
@@ -99,27 +104,32 @@ impl ListDelegate for AppList {
         cx: &mut Context<ListState<Self>>,
     ) -> Option<ListItem> {
         let entry = self.entry_at(ix)?;
-        let (id, name, version, source) = (
-            entry.id.clone(),
-            entry.name.clone(),
-            entry.version.clone(),
-            entry.source,
-        );
         let muted = cx.theme().muted_foreground;
-        let source = source_label(self.lang, source);
+        let icon = self.icons.get(&entry.id).cloned();
+        let meta = format!(
+            "{} · {}",
+            if entry.version.is_empty() {
+                "—"
+            } else {
+                entry.version.as_ref()
+            },
+            rind_i18n::format_size(self.lang, entry.app.size)
+        );
+        let source = source_label(self.lang, entry.source);
         Some(
-            ListItem::new(ElementId::from(id)).child(
+            ListItem::new(ElementId::from(entry.id.clone())).child(
                 h_flex()
                     .w_full()
-                    .gap_2()
+                    .gap_2p5()
                     .px_2()
                     .py_1()
+                    .child(kit::app_avatar(&entry.name, icon, px(32.)))
                     .child(
                         v_flex()
                             .flex_1()
                             .min_w_0()
-                            .child(div().truncate().child(name))
-                            .child(div().text_xs().text_color(muted).child(version)),
+                            .child(div().text_sm().truncate().child(entry.name.clone()))
+                            .child(div().text_xs().text_color(muted).truncate().child(meta)),
                     )
                     .child(Tag::secondary().xsmall().child(source)),
             ),
@@ -173,7 +183,7 @@ impl LeftoverTable {
             Column::new("path", ui(lang, Key::ColPath)).width(px(380.)),
             Column::new("kind", ui(lang, Key::ColKind)).width(px(110.)),
             Column::new("size", ui(lang, Key::ColSize))
-                .width(px(90.))
+                .width(px(110.))
                 .text_right(),
             Column::new("confidence", ui(lang, Key::ColConfidence)).width(px(90.)),
             Column::new("reason", ui(lang, Key::ColReason)).width(px(360.)),
@@ -268,7 +278,7 @@ impl LeftoverTable {
         self.view.as_ref().map_or(0, |v| {
             v.rows
                 .iter()
-                .filter(|r| !r.size_known && self.selection.paths.contains(&r.path))
+                .filter(|r| r.bytes.is_none() && self.selection.paths.contains(&r.path))
                 .count()
         })
     }
@@ -340,30 +350,33 @@ impl TableDelegate for LeftoverTable {
                 .text_color(muted)
                 .child(row.kind.clone())
                 .into_any_element(),
-            3 => div()
-                .text_sm()
-                .w_full()
-                .text_right()
-                .when(!row.size_known, |this| this.text_color(muted))
-                .child(row.size.clone())
-                .into_any_element(),
-            4 => {
-                let tag = match row.confidence {
-                    Confidence::Certain => Tag::success(),
-                    Confidence::Likely => Tag::info(),
-                    Confidence::Possible => Tag::secondary(),
+            3 => {
+                let max = self.view.as_ref().map_or(0, |v| v.max_bytes);
+                let fraction = match (row.bytes, max) {
+                    (Some(n), m) if m > 0 => n as f32 / m as f32,
+                    _ => 0.0,
                 };
-                tag.xsmall()
-                    .child(row.confidence_label.clone())
+                v_flex()
+                    .w_full()
+                    .gap_1()
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_right()
+                            .when(row.bytes.is_none(), |this| this.text_color(muted))
+                            .child(row.size.clone()),
+                    )
+                    .child(kit::bar(fraction, cx.theme().primary.opacity(0.7), cx).h(px(4.)))
                     .into_any_element()
             }
+            4 => kit::confidence_tag(self.lang, row.confidence).into_any_element(),
             _ => {
                 if let Some(hold_back) = row.hold_back.clone() {
                     h_flex()
                         .gap_1()
                         .text_sm()
                         .text_color(cx.theme().warning)
-                        .child(Icon::new(IconName::TriangleAlert).xsmall())
+                        .child(Icon::new(LucideIcon::TriangleAlert).xsmall())
                         .child(div().truncate().child(hold_back))
                         .into_any_element()
                 } else if row.shared_with.is_empty() {
@@ -388,18 +401,15 @@ impl TableDelegate for LeftoverTable {
 /// 扫描到哪一步了。
 enum ScanState {
     Idle,
-    Scanning {
-        message: SharedString,
-        percent: Option<f32>,
-    },
+    Scanning(Option<ScanProgress>),
     Ready,
 }
 
 pub struct AppsPage {
     services: Arc<Services>,
+    scans: Entity<Scans>,
     list: Entity<ListState<AppList>>,
     table: Entity<TableState<LeftoverTable>>,
-    apps_loading: bool,
     selected: Option<AppEntry>,
     scan: ScanState,
     /// 每次开始扫描加一，晚到的结果对不上就丢掉。
@@ -408,11 +418,20 @@ pub struct AppsPage {
     cancel: Option<Arc<AtomicBool>>,
     /// 正在移动或退出 App，期间按钮不可用。
     busy: bool,
+    /// 最近一次装进列表的 App 列表（看 epoch 判断有没有新的）。
+    apps_epoch: u64,
+    /// 已经请求过图标的 App，避免重复转换。
+    icons_requested: HashSet<SharedString>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl AppsPage {
-    pub fn new(services: Arc<Services>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        services: Arc<Services>,
+        scans: Entity<Scans>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let lang = strings::lang(cx);
         let list = cx.new(|cx| ListState::new(AppList::new(lang), window, cx).searchable(true));
         let table = cx.new(|cx| {
@@ -428,37 +447,53 @@ impl AppsPage {
                 ListEvent::Cancel => {}
             }),
             cx.observe(&table, |_, _, cx| cx.notify()),
+            cx.observe(&scans, |this, _, cx| this.sync_apps(cx)),
             cx.observe_global::<LangSetting>(|this, cx| this.lang_changed(cx)),
         ];
         let mut page = Self {
             services,
+            scans,
             list,
             table,
-            apps_loading: false,
             selected: None,
             scan: ScanState::Idle,
             generation: 0,
             cancel: None,
             busy: false,
+            apps_epoch: 0,
+            icons_requested: HashSet::new(),
             _subscriptions: subscriptions,
         };
-        page.load_apps(cx);
+        page.sync_apps(cx);
         page
     }
 
-    fn load_apps(&mut self, cx: &mut Context<Self>) {
-        self.apps_loading = true;
-        cx.notify();
-        let services = self.services.clone();
-        cx.spawn(async move |this, cx| {
-            let apps = cx.background_spawn(async move { services.apps() }).await;
-            this.update(cx, |this, cx| this.apps_loaded(apps, cx)).ok();
-        })
-        .detach();
+    fn apps_loading(&self, cx: &App) -> bool {
+        let slot = &self.scans.read(cx).apps;
+        slot.is_running() && slot.data.is_none()
     }
 
-    fn apps_loaded(&mut self, apps: Vec<AppEntry>, cx: &mut Context<Self>) {
-        self.apps_loading = false;
+    fn load_apps(&mut self, cx: &mut Context<Self>) {
+        self.scans.update(cx, |s, cx| s.load_apps(cx));
+    }
+
+    /// 共享仓库里的 App 列表变了（新扫描或剪枝）：装进列表，选中的 App 不在了就清掉详情。
+    fn sync_apps(&mut self, cx: &mut Context<Self>) {
+        let (epoch, apps) = {
+            let slot = &self.scans.read(cx).apps;
+            (slot.epoch, slot.data.clone())
+        };
+        let Some(apps) = apps else {
+            cx.notify();
+            return;
+        };
+        let current_len = self.list.read(cx).delegate().all.len();
+        if epoch == self.apps_epoch && current_len == apps.len() {
+            cx.notify();
+            return;
+        }
+        self.apps_epoch = epoch;
+        let apps: Vec<AppEntry> = apps.as_ref().clone();
         if let Some(selected) = &self.selected {
             if !apps.iter().any(|a| a.id == selected.id) {
                 self.selected = None;
@@ -471,11 +506,49 @@ impl AppsPage {
                 });
             }
         }
+        self.load_icons(&apps, cx);
         self.list.update(cx, |list, cx| {
             list.delegate_mut().set_apps(apps);
             cx.notify();
         });
         cx.notify();
+    }
+
+    /// 在后台一个个转图标，转好一个显示一个；失败的就一直用字母头像。
+    fn load_icons(&mut self, apps: &[AppEntry], cx: &mut Context<Self>) {
+        let missing: Vec<AppEntry> = apps
+            .iter()
+            .filter(|a| self.icons_requested.insert(a.id.clone()))
+            .cloned()
+            .collect();
+        if missing.is_empty() || self.services.is_demo() {
+            return;
+        }
+        let services = self.services.clone();
+        cx.spawn(async move |this, cx| {
+            let (tx, mut rx) = futures::channel::mpsc::unbounded::<(SharedString, PathBuf)>();
+            let task = cx.background_spawn(async move {
+                for entry in missing {
+                    if let Some(png) = services.app_icon(&entry.app) {
+                        let _ = tx.unbounded_send((entry.id.clone(), png));
+                    }
+                }
+            });
+            while let Some((id, png)) = rx.next().await {
+                let alive = this.update(cx, |this, cx| {
+                    this.list.update(cx, |list, cx| {
+                        list.delegate_mut().icons.insert(id, png);
+                        cx.notify();
+                    });
+                    cx.notify();
+                });
+                if alive.is_err() {
+                    return;
+                }
+            }
+            task.await;
+        })
+        .detach();
     }
 
     /// 选了一个 App，或再点了一次同一个：都重新扫描，这样退出 App 之后再点就能看到最新状态。
@@ -494,6 +567,18 @@ impl AppsPage {
         }
     }
 
+    fn cancel_scan(&mut self, cx: &mut Context<Self>) {
+        self.stop_scan();
+        self.generation += 1;
+        self.scan = ScanState::Idle;
+        self.table.update(cx, |table, cx| {
+            table.delegate_mut().set_loading(false);
+            table.refresh(cx);
+            cx.notify();
+        });
+        cx.notify();
+    }
+
     fn start_plan(&mut self, cx: &mut Context<Self>) {
         let Some(entry) = self.selected.clone() else {
             return;
@@ -507,10 +592,7 @@ impl AppsPage {
         let generation = self.generation;
         let cancel = Arc::new(AtomicBool::new(false));
         self.cancel = Some(cancel.clone());
-        self.scan = ScanState::Scanning {
-            message: ui(lang, Key::Scanning).into(),
-            percent: None,
-        };
+        self.scan = ScanState::Scanning(None);
         self.table.update(cx, |table, cx| {
             table.delegate_mut().set_view(None);
             table.delegate_mut().set_loading(true);
@@ -547,26 +629,10 @@ impl AppsPage {
     }
 
     fn scan_progressed(&mut self, generation: u64, progress: ScanProgress, cx: &mut Context<Self>) {
-        if generation != self.generation {
+        if generation != self.generation || matches!(progress, ScanProgress::Finished) {
             return;
         }
-        let lang = strings::lang(cx);
-        let (message, percent) = match progress {
-            ScanProgress::Location(location) => (strings::scanning_location(lang, &location), None),
-            ScanProgress::Measuring { done, total } => {
-                let percent = if total == 0 {
-                    100.0
-                } else {
-                    done as f32 / total as f32 * 100.0
-                };
-                (strings::measuring(lang, done, total), Some(percent))
-            }
-            ScanProgress::Finished => return,
-        };
-        self.scan = ScanState::Scanning {
-            message: message.into(),
-            percent,
-        };
+        self.scan = ScanState::Scanning(Some(progress));
         cx.notify();
     }
 
@@ -604,12 +670,6 @@ impl AppsPage {
             table.refresh(cx);
             cx.notify();
         });
-        if let ScanState::Scanning { .. } = self.scan {
-            self.scan = ScanState::Scanning {
-                message: ui(lang, Key::Scanning).into(),
-                percent: None,
-            };
-        }
         cx.notify();
     }
 
@@ -733,6 +793,7 @@ impl AppsPage {
                 lines.push(strings::confirm_unknown(lang, unknown).into());
             }
             lines.push(ui(lang, Key::ConfirmNote).into());
+            lines.push(ui(lang, Key::EmptyTrashHint).into());
             lines
         };
         let weak = cx.weak_entity();
@@ -791,73 +852,33 @@ impl AppsPage {
     ) {
         self.busy = false;
         let lang = strings::lang(cx);
-        match result {
-            Ok(outcome) => {
-                let summary = Self::summarize(lang, &outcome);
-                let note = if outcome.moved.is_empty() {
-                    Notification::warning(summary).title(ui(lang, Key::NothingMoved))
-                } else {
-                    Notification::success(summary).title(ui(lang, Key::ResultTitle))
-                };
-                window.push_notification(note, cx);
-                self.after_moving(&outcome, cx);
-            }
-            // 东西已经在废纸篓里了，只是 History 没记全：当结果看，另外说清楚。
-            Err(ExecuteFailure::Partial { error, partial }) => {
-                let summary = Self::summarize(lang, &partial);
-                window.push_notification(
-                    Notification::warning(format!(
-                        "{summary} {}",
-                        strings::partial_note(lang, &error)
-                    ))
-                    .title(ui(lang, Key::PartialTitle)),
-                    cx,
-                );
-                self.after_moving(&partial, cx);
-            }
-            Err(ExecuteFailure::AppRunning) => {
-                self.table.update(cx, |table, cx| {
-                    table.delegate_mut().set_running(true);
-                    cx.notify();
-                });
-                let name = self
-                    .selected
-                    .as_ref()
-                    .map(|s| s.name.to_string())
-                    .unwrap_or_default();
-                window.push_notification(
-                    Notification::warning(strings::app_running(lang, &name))
-                        .title(ui(lang, Key::NothingMoved)),
-                    cx,
-                );
-            }
-            Err(failure) => {
-                window.push_notification(
-                    Notification::error(strings::describe_failure(lang, &failure))
-                        .title(ui(lang, Key::NothingMoved)),
-                    cx,
-                );
-            }
+        if let Err(ExecuteFailure::AppRunning) = result {
+            self.table.update(cx, |table, cx| {
+                table.delegate_mut().set_running(true);
+                cx.notify();
+            });
+            let name = self
+                .selected
+                .as_ref()
+                .map(|s| s.name.to_string())
+                .unwrap_or_default();
+            window.push_notification(
+                Notification::warning(strings::app_running(lang, &name))
+                    .title(ui(lang, Key::NothingMoved)),
+                cx,
+            );
+        } else if let Some(outcome) = kit::notify_outcome(&result, window, cx) {
+            self.after_moving(&outcome, cx);
         }
         cx.notify();
     }
 
-    fn summarize(lang: Lang, outcome: &RemovalOutcome) -> String {
-        let freed = rind_i18n::format_size(lang, Size::Known(outcome.freed));
-        strings::result_summary(
-            lang,
-            outcome.moved.len(),
-            &freed,
-            outcome.refused.len(),
-            outcome.failed.len(),
-        )
-    }
-
-    /// 移动过东西之后：App 本体走了就清掉详情，否则重新扫描；列表也重读。
+    /// 移动过东西之后：从所有共享结果里剪掉；App 本体走了就清掉详情，否则重新扫描；列表也重读。
     fn after_moving(&mut self, outcome: &RemovalOutcome, cx: &mut Context<Self>) {
+        let moved: HashSet<PathBuf> = outcome.moved.iter().map(|(p, _)| p.clone()).collect();
+        self.scans.update(cx, |s, cx| s.forget(&moved, cx));
         let app_path = self.selected.as_ref().map(|s| s.app.path.clone());
-        let app_moved =
-            app_path.is_some_and(|p| outcome.moved.iter().any(|(original, _)| *original == p));
+        let app_moved = app_path.is_some_and(|p| moved.contains(&p));
         if app_moved {
             self.selected = None;
             self.scan = ScanState::Idle;
@@ -875,23 +896,34 @@ impl AppsPage {
 
     fn render_app_list(&self, lang: Lang, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
+        let loading = self.apps_loading(cx);
+        let count = self.list.read(cx).delegate().all.len();
         v_flex()
-            .w_72()
+            .w(px(300.))
             .h_full()
             .flex_shrink_0()
+            .border_r_1()
+            .border_color(cx.theme().border)
             .child(
-                h_flex().px_2().pt_2().justify_end().child(
-                    Button::new("refresh-apps")
-                        .xsmall()
-                        .ghost()
-                        .icon(Icon::new(LucideIcon::RefreshCw))
-                        .label(ui(lang, Key::RefreshApps))
-                        .disabled(self.apps_loading)
-                        .on_click(cx.listener(|this, _, _, cx| this.load_apps(cx))),
-                ),
+                h_flex()
+                    .px_3()
+                    .pt_1()
+                    .pb_1()
+                    .text_xs()
+                    .text_color(muted)
+                    .child(div().flex_1().child(strings::app_count_line(lang, count)))
+                    .child(
+                        Button::new("refresh-apps")
+                            .xsmall()
+                            .ghost()
+                            .icon(Icon::new(LucideIcon::RefreshCw))
+                            .tooltip(ui(lang, Key::RefreshApps))
+                            .loading(self.scans.read(cx).apps.is_running())
+                            .on_click(cx.listener(|this, _, _, cx| this.load_apps(cx))),
+                    ),
             )
             .map(|this| {
-                if self.apps_loading {
+                if loading {
                     this.child(
                         h_flex()
                             .gap_2()
@@ -921,47 +953,59 @@ impl AppsPage {
             .view()
             .map(|v| v.app_size.clone())
             .unwrap_or_default();
-        v_flex()
-            .gap_1()
-            .px_4()
+        let icon = self.list.read(cx).delegate().icons.get(&entry.id).cloned();
+        h_flex()
+            .gap_3()
+            .px_5()
             .pt_4()
             .pb_3()
-            .border_b_1()
-            .border_color(cx.theme().border)
+            .child(kit::app_avatar(&entry.name, icon, px(48.)))
             .child(
-                h_flex()
-                    .gap_2()
-                    .child(div().text_xl().font_bold().child(entry.name.clone()))
+                v_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .gap_0p5()
                     .child(
-                        Tag::secondary()
-                            .xsmall()
-                            .child(source_label(lang, entry.source)),
-                    ),
-            )
-            .child(
-                h_flex()
-                    .gap_4()
-                    .text_sm()
-                    .text_color(muted)
-                    .child(format!(
+                        h_flex()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .text_lg()
+                                    .font_semibold()
+                                    .truncate()
+                                    .child(entry.name.clone()),
+                            )
+                            .child(
+                                Tag::secondary()
+                                    .xsmall()
+                                    .child(source_label(lang, entry.source)),
+                            ),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_4()
+                            .text_xs()
+                            .text_color(muted)
+                            .child(format!(
+                                "{}: {}",
+                                ui(lang, Key::DetailBundleId),
+                                entry.bundle_id
+                            ))
+                            .child(format!(
+                                "{}: {}",
+                                ui(lang, Key::DetailVersion),
+                                entry.version
+                            ))
+                            .when(!size.is_empty(), |this| {
+                                this.child(format!("{}: {}", ui(lang, Key::DetailSize), size))
+                            }),
+                    )
+                    .child(div().text_xs().text_color(muted).truncate().child(format!(
                         "{}: {}",
-                        ui(lang, Key::DetailBundleId),
-                        entry.bundle_id
-                    ))
-                    .child(format!(
-                        "{}: {}",
-                        ui(lang, Key::DetailVersion),
-                        entry.version
-                    ))
-                    .when(!size.is_empty(), |this| {
-                        this.child(format!("{}: {}", ui(lang, Key::DetailSize), size))
-                    }),
+                        ui(lang, Key::DetailPath),
+                        entry.display_path
+                    ))),
             )
-            .child(div().text_sm().text_color(muted).truncate().child(format!(
-                "{}: {}",
-                ui(lang, Key::DetailPath),
-                entry.display_path
-            )))
     }
 
     fn render_notices(
@@ -983,32 +1027,22 @@ impl AppsPage {
             .ledger_error()
             .map(|e| strings::ledger_unavailable(lang, e));
         v_flex()
+            .px_5()
+            .gap_2()
             .when_some(ledger_error, |this, message| {
-                this.child(
-                    h_flex()
-                        .gap_2()
-                        .px_4()
-                        .py_2()
-                        .text_sm()
-                        .bg(cx.theme().danger.opacity(0.12))
-                        .text_color(cx.theme().danger)
-                        .child(Icon::new(IconName::TriangleAlert).small())
-                        .child(div().flex_1().child(message)),
-                )
+                this.child(kit::banner(
+                    Tone::Danger,
+                    LucideIcon::TriangleAlert,
+                    message,
+                    cx,
+                ))
             })
             .when(running, |this| {
-                this.child(
+                this.child(kit::banner(
+                    Tone::Warning,
+                    LucideIcon::TriangleAlert,
                     h_flex()
                         .gap_2()
-                        .px_4()
-                        .py_2()
-                        .text_sm()
-                        .bg(cx.theme().warning.opacity(0.12))
-                        .child(
-                            Icon::new(IconName::TriangleAlert)
-                                .small()
-                                .text_color(cx.theme().warning),
-                        )
                         .child(
                             div()
                                 .flex_1()
@@ -1016,7 +1050,7 @@ impl AppsPage {
                         )
                         .child(
                             Button::new("quit-app")
-                                .small()
+                                .xsmall()
                                 .outline()
                                 .label(ui(lang, Key::Quit))
                                 .disabled(self.busy)
@@ -1026,7 +1060,7 @@ impl AppsPage {
                         )
                         .child(
                             Button::new("force-quit-app")
-                                .small()
+                                .xsmall()
                                 .danger()
                                 .label(ui(lang, Key::ForceQuit))
                                 .disabled(self.busy)
@@ -1034,56 +1068,56 @@ impl AppsPage {
                                     this.quit_app(true, window, cx)
                                 })),
                         ),
-                )
+                    cx,
+                ))
             })
             .when_some(app_hold_back, |this, reason| {
-                this.child(
-                    h_flex()
-                        .gap_2()
-                        .px_4()
-                        .py_2()
-                        .text_sm()
-                        .text_color(cx.theme().warning)
-                        .child(Icon::new(IconName::TriangleAlert).small())
-                        .child(strings::app_held(lang, &reason)),
-                )
+                this.child(kit::banner(
+                    Tone::Warning,
+                    LucideIcon::ShieldCheck,
+                    strings::app_held(lang, &reason),
+                    cx,
+                ))
             })
     }
 
     fn render_toolbar(&self, lang: Lang, cx: &mut Context<Self>) -> impl IntoElement {
-        let (has_view, running, app_locked, include_app, count, freed) = {
+        let (has_view, app_locked, include_app) = {
             let delegate = self.table.read(cx).delegate();
             (
                 delegate.view().is_some(),
-                delegate.view().is_some_and(|v| v.running),
                 delegate.view().is_some_and(|v| v.app_hold_back.is_some()),
                 delegate.selection().include_app,
-                delegate.selected_count(),
-                delegate.freed(),
             )
         };
         let ready = matches!(self.scan, ScanState::Ready) && has_view;
-        let scanning = matches!(self.scan, ScanState::Scanning { .. });
-        let no_ledger = self.services.ledger_error().is_some();
-        let freed = rind_i18n::format_size(lang, Size::Known(freed));
+        let scanning = matches!(self.scan, ScanState::Scanning(_));
         h_flex()
             .gap_2()
-            .px_4()
-            .py_2()
+            .px_5()
+            .py_3()
             .flex_wrap()
-            .child(
+            .child(if scanning {
+                Button::new("cancel-scan")
+                    .small()
+                    .outline()
+                    .icon(Icon::new(LucideIcon::X))
+                    .label(ui(lang, Key::Cancel))
+                    .on_click(cx.listener(|this, _, _, cx| this.cancel_scan(cx)))
+            } else {
                 Button::new("rescan")
                     .small()
-                    .ghost()
+                    .outline()
                     .icon(Icon::new(LucideIcon::RefreshCw))
                     .label(ui(lang, Key::Rescan))
-                    .disabled(scanning || self.busy || self.selected.is_none())
-                    .on_click(cx.listener(|this, _, _, cx| this.start_plan(cx))),
-            )
+                    .disabled(self.busy || self.selected.is_none())
+                    .on_click(cx.listener(|this, _, _, cx| this.start_plan(cx)))
+            })
             .child(
                 Button::new("select-suggested")
                     .small()
                     .outline()
+                    .icon(Icon::new(LucideIcon::Sparkles))
                     .label(ui(lang, Key::SelectSuggested))
                     .disabled(!ready)
                     .on_click(cx.listener(|this, _, _, cx| this.select_suggested(cx))),
@@ -1096,6 +1130,7 @@ impl AppsPage {
                     .disabled(!ready)
                     .on_click(cx.listener(|this, _, _, cx| this.clear_selection(cx))),
             )
+            .child(div().flex_1())
             .child(
                 Checkbox::new("include-app")
                     .label(ui(lang, Key::IncludeApp))
@@ -1105,16 +1140,33 @@ impl AppsPage {
                         this.set_include_app(*include, cx)
                     })),
             )
-            .child(div().flex_1())
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(strings::selected_summary(lang, count, &freed)),
+    }
+
+    fn render_footer(&self, lang: Lang, cx: &mut Context<Self>) -> impl IntoElement {
+        let (has_view, running, count, freed, unknown) = {
+            let delegate = self.table.read(cx).delegate();
+            (
+                delegate.view().is_some(),
+                delegate.view().is_some_and(|v| v.running),
+                delegate.selected_count(),
+                delegate.freed(),
+                delegate.unknown_selected(),
             )
+        };
+        let ready = matches!(self.scan, ScanState::Ready) && has_view;
+        let no_ledger = self.services.ledger_error().is_some();
+        kit::footer_bar(cx)
+            .child(kit::picked_summary(
+                lang,
+                crate::model::Picked {
+                    count,
+                    bytes: freed,
+                    unknown,
+                },
+                cx,
+            ))
             .child(
                 Button::new("move-to-trash")
-                    .small()
                     .danger()
                     .icon(Icon::new(LucideIcon::Trash))
                     .label(ui(lang, Key::MoveToTrash))
@@ -1124,38 +1176,23 @@ impl AppsPage {
             )
     }
 
-    fn render_scan_status(&self, cx: &Context<Self>) -> Option<impl IntoElement> {
-        let ScanState::Scanning { message, percent } = &self.scan else {
-            return None;
-        };
-        Some(
-            h_flex()
-                .gap_2()
-                .px_4()
-                .pb_2()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .child(Spinner::new().small())
-                .child(message.clone())
-                .when_some(*percent, |this, percent| {
-                    this.child(div().w_40().child(Progress::new("scan").value(percent)))
-                }),
-        )
-    }
-
     fn render_detail(&self, lang: Lang, cx: &mut Context<Self>) -> impl IntoElement {
         let Some(entry) = self.selected.clone() else {
             return v_flex()
                 .flex_1()
                 .min_w_0()
                 .h_full()
-                .items_center()
-                .justify_center()
-                .p_8()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .child(ui(lang, Key::NoAppSelected))
+                .child(kit::empty_state(
+                    LucideIcon::AppWindow,
+                    ui(lang, Key::NoAppSelectedTitle),
+                    ui(lang, Key::NoAppSelected),
+                    cx,
+                ))
                 .into_any_element();
+        };
+        let progress = match &self.scan {
+            ScanState::Scanning(progress) => Some(progress.clone()),
+            _ => None,
         };
         v_flex()
             .flex_1()
@@ -1164,15 +1201,23 @@ impl AppsPage {
             .child(self.render_header(&entry, lang, cx))
             .child(self.render_notices(&entry, lang, cx))
             .child(self.render_toolbar(lang, cx))
-            .children(self.render_scan_status(cx))
+            .when_some(progress, |this, progress| {
+                this.child(div().px_5().pb_3().child(kit::progress_block(
+                    "plan-progress",
+                    lang,
+                    progress.as_ref(),
+                    cx,
+                )))
+            })
             .child(
                 div()
                     .flex_1()
                     .min_h_0()
-                    .px_4()
+                    .px_5()
                     .pb_4()
                     .child(DataTable::new(&self.table).stripe(true).bordered(true)),
             )
+            .child(self.render_footer(lang, cx))
             .into_any_element()
     }
 }
@@ -1180,11 +1225,22 @@ impl AppsPage {
 impl Render for AppsPage {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let lang = strings::lang(cx);
-        h_flex()
-            .items_stretch()
-            .size_full()
-            .child(self.render_app_list(lang, cx))
-            .child(div().w_px().h_full().flex_shrink_0().bg(cx.theme().border))
-            .child(self.render_detail(lang, cx))
+        let header = kit::page_header(
+            LucideIcon::AppWindow,
+            ui(lang, Key::NavApps),
+            ui(lang, Key::AppsSubtitle),
+            div(),
+            cx,
+        );
+        v_flex().size_full().child(header).child(
+            h_flex()
+                .flex_1()
+                .min_h_0()
+                .items_stretch()
+                .border_t_1()
+                .border_color(cx.theme().border)
+                .child(self.render_app_list(lang, cx))
+                .child(self.render_detail(lang, cx)),
+        )
     }
 }

@@ -1,15 +1,16 @@
 //! 卸载的两步：出计划，按用户的选择执行。规则见 docs/ARCHITECTURE.md 第 5、7 步。
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
 use crate::history::Ledger;
 use crate::leftovers::{self, ScanOptions};
+use crate::remove::{plan_moves, refusal, Batch, Moved, Mover};
 use crate::rules::RuleSet;
 use crate::{
-    protect, running, size, trash, Env, HistoryItem, HistoryRecord, HoldBack, InstalledApp,
-    ProtectReason, RemovalOutcome, ScanProgress, Selection, Size, Source, UninstallPlan,
+    protect, running, size, Env, HoldBack, InstalledApp, RecordKind, RemovalOutcome, ScanProgress,
+    Selection, Size, Source, UninstallPlan,
 };
 
 #[derive(Clone, Debug)]
@@ -148,40 +149,39 @@ pub fn execute(
     } else {
         None
     };
-    let mut queue: Vec<(PathBuf, Size)> = Vec::new();
-    for m in &plan.leftovers {
-        if !selection.paths.contains(&m.path) {
-            continue;
-        }
-        match refusal(env, m.hold_back.as_ref(), &m.path) {
-            Some(why) => outcome.refused.push((m.path.clone(), why)),
-            None => queue.push((m.path.clone(), m.size)),
-        }
-    }
+    // 残留和 `remove::trash_items` 走同一套排队：外层里有不能动的东西就拒绝外层，内层随外层走。
+    let all: Vec<(&Path, Option<&HoldBack>)> = plan
+        .leftovers
+        .iter()
+        .map(|m| (m.path.as_path(), m.hold_back.as_ref()))
+        .collect();
+    let chosen: Vec<(&Path, Size, Option<&HoldBack>)> = plan
+        .leftovers
+        .iter()
+        .filter(|m| selection.paths.contains(&m.path))
+        .map(|m| (m.path.as_path(), m.size, m.hold_back.as_ref()))
+        .collect();
+    let queue = plan_moves(env, &all, &chosen, &mut outcome.refused);
 
     if dry_run {
-        for (path, size) in app_item.iter().chain(queue.iter()) {
+        if let Some((path, size)) = &app_item {
             outcome.moved.push((path.clone(), path.clone()));
             outcome.freed += size.known().unwrap_or(0);
+        }
+        for planned in &queue {
+            planned.pretend(&mut outcome);
         }
         return Ok(outcome);
     }
     let ledger = ledger.expect("checked above: a real run has a ledger");
 
-    let mut mover = Mover {
-        env,
-        ledger,
-        record: HistoryRecord {
-            id: uuid::Uuid::new_v4().to_string(),
-            at: chrono::Utc::now(),
-            app_name: plan.app.name.clone(),
-            bundle_id: plan.app.bundle_id.clone(),
-            source,
-            items: Vec::new(),
-            restored: false,
-        },
-        outcome,
+    let batch = Batch {
+        kind: RecordKind::Uninstall,
+        title: plan.app.name.clone(),
+        bundle_id: plan.app.bundle_id.clone(),
+        source,
     };
+    let mut mover = Mover::new(env, ledger, &batch, outcome, None);
 
     if let Some((path, size)) = app_item {
         match mover.move_one(&path, size) {
@@ -196,138 +196,23 @@ pub fn execute(
         }
     }
 
-    for (path, size) in queue {
-        mover.move_one(&path, size)?;
+    for planned in queue {
+        mover.move_planned(planned)?;
     }
-
-    let Mover {
-        record,
-        mut outcome,
-        ledger,
-        ..
-    } = mover;
-    if record.items.is_empty() {
-        // 什么都没移成（全被拒绝或失败）：没有东西可放回，也就不留一条空记录。
-        let _ = ledger.remove(&record.id);
-        outcome.record_id = None;
-    } else {
-        outcome.record_id = Some(record.id);
-    }
-    Ok(outcome)
-}
-
-enum Moved {
-    Done,
-    Refused(String),
-    Failed(String),
-}
-
-/// 一次执行里"动一项"的全部步骤，带着记录和结果走。
-struct Mover<'a> {
-    env: &'a Env,
-    ledger: &'a Ledger,
-    record: HistoryRecord,
-    outcome: RemovalOutcome,
-}
-
-impl Mover<'_> {
-    /// 解析 → 查保护区 → 记下意图 → 移动 → 回填。拒绝和失败都记在 `outcome` 里并返回；
-    /// 只有写不了 History 才是 `Err`。
-    fn move_one(&mut self, path: &Path, size: Size) -> Result<Moved, ExecuteError> {
-        // 紧挨着移动再解析一次：计划生成后路径可能被换成了链接，或者里面多了个钱包。
-        let real = match protect::resolve(self.env, path) {
-            Ok(real) => real,
-            Err(why) => {
-                let why = protected_reason(why);
-                self.outcome.refused.push((path.to_path_buf(), why.clone()));
-                return Ok(Moved::Refused(why));
-            }
-        };
-        if let Some(why) = protect::check(self.env, &real) {
-            let why = protected_reason(why);
-            self.outcome.refused.push((path.to_path_buf(), why.clone()));
-            return Ok(Moved::Refused(why));
-        }
-
-        // 先记意图：没有记录的东西不会进废纸篓。
-        self.record.items.push(HistoryItem {
-            original: path.to_path_buf(),
-            trashed: path.to_path_buf(),
-            size,
-            pending: true,
-            restored: false,
-        });
-        self.write_record()?;
-
-        match trash::move_to_trash(&real) {
-            Ok(trashed) => {
-                self.outcome.freed += size.known().unwrap_or(0);
-                self.outcome
-                    .moved
-                    .push((path.to_path_buf(), trashed.clone()));
-                if let Some(item) = self.record.items.last_mut() {
-                    item.trashed = trashed;
-                    item.pending = false;
-                }
-                // 东西已经在废纸篓里了；记不下来就停，别再动下一项。
-                self.write_record()?;
-                Ok(Moved::Done)
-            }
-            Err(e) => {
-                let why = e.to_string();
-                self.forget_last();
-                self.write_record()?;
-                self.outcome.failed.push((path.to_path_buf(), why.clone()));
-                Ok(Moved::Failed(why))
-            }
-        }
-    }
-
-    fn forget_last(&mut self) {
-        self.record.items.pop();
-    }
-
-    fn write_record(&mut self) -> Result<(), ExecuteError> {
-        self.ledger
-            .update(&self.record)
-            .map_err(|e| ExecuteError::Ledger {
-                error: e.to_string(),
-                partial: Box::new(self.outcome.clone()),
-            })
-    }
-}
-
-/// 这一项现在还能动吗？不能就说为什么。`hold_back` 里能手动选的（共用、读不了）不算拒绝。
-fn refusal(env: &Env, hold_back: Option<&HoldBack>, path: &Path) -> Option<String> {
-    if let Some(hold_back) = hold_back {
-        match hold_back {
-            HoldBack::Protected { why } => return Some(protected_reason(*why)),
-            HoldBack::NeedsAdmin => return Some("needs an administrator".to_string()),
-            HoldBack::SystemOwned => return Some("belongs to macOS".to_string()),
-            HoldBack::SharedWith { .. } | HoldBack::Unreadable => {}
-        }
-    }
-    protect::check(env, path).map(protected_reason)
-}
-
-fn protected_reason(why: ProtectReason) -> String {
-    format!(
-        "protected: {}",
-        serde_json::to_value(why)
-            .ok()
-            .and_then(|v| v.as_str().map(String::from))
-            .unwrap_or_default()
-    )
+    // 什么都没移成（全被拒绝或失败）：没有东西可放回，也就不留一条空记录。
+    Ok(mover.finish())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::trash::testing::scratch;
+    use crate::{trash, HistoryRecord};
     use crate::{
         AppRef, AppSource, Confidence, Evidence, EvidenceKind, LeftoverKind, LeftoverMatch,
     };
     use std::fs;
+    use std::path::PathBuf;
 
     /// 假的家目录放在真实家目录下面，这样废纸篓在同一个卷上。
     fn scratch_env() -> (tempfile::TempDir, Env) {
@@ -676,6 +561,7 @@ mod tests {
         HistoryRecord {
             id: "stub".to_string(),
             at: chrono::Utc::now(),
+            kind: RecordKind::Uninstall,
             app_name: "Stub".to_string(),
             bundle_id: None,
             source: Source::Cli,
@@ -862,5 +748,80 @@ mod tests {
             vec![(inside.path.clone(), "protected: keychain".to_string())]
         );
         assert!(keychains.join("login.keychain-db").exists());
+    }
+
+    #[test]
+    fn a_symlinked_app_bundle_moves_as_a_link_and_the_target_stays() {
+        // `/Applications/Foo.app` 是个链接：叶子不跟随，`resolve` 的结果就是它自己，不算"路径变了"。
+        let (d, env) = scratch_env();
+        let mut guard = PutBack(vec![]);
+        let real_app = app(&env);
+        let elsewhere = d.path().join("Elsewhere/Foo.app");
+        fs::create_dir_all(elsewhere.parent().unwrap()).unwrap();
+        fs::rename(&real_app.path, &elsewhere).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, &real_app.path).unwrap();
+        let plan = UninstallPlan {
+            app: real_app.clone(),
+            app_hold_back: None,
+            leftovers: vec![],
+            running: false,
+        };
+        let selection = Selection {
+            include_app: true,
+            ..Default::default()
+        };
+        let outcome = execute(
+            &env,
+            &plan,
+            &selection,
+            Source::Cli,
+            false,
+            Some(&ledger(&env)),
+        )
+        .unwrap();
+        guard.note(&outcome);
+        assert_eq!(outcome.moved.len(), 1, "{outcome:?}");
+        assert!(fs::symlink_metadata(&real_app.path).is_err());
+        assert!(
+            elsewhere.join("Contents/MacOS/Foo").exists(),
+            "only the link moved"
+        );
+    }
+
+    #[test]
+    fn a_leftover_folder_holding_something_that_must_stay_is_refused() {
+        let (_d, env) = scratch_env();
+        let outer = leftover(
+            env.user_library.join("Application Support/com.foo.bar"),
+            Size::Known(5),
+            None,
+        );
+        fs::remove_file(&outer.path).unwrap();
+        fs::create_dir_all(&outer.path).unwrap();
+        let inner = leftover(
+            outer.path.join("helper"),
+            Size::Known(1),
+            Some(HoldBack::NeedsAdmin),
+        );
+        let plan = UninstallPlan {
+            app: app(&env),
+            app_hold_back: None,
+            leftovers: vec![outer.clone(), inner.clone()],
+            running: false,
+        };
+        let mut selection = Selection::default();
+        selection.paths.insert(outer.path.clone());
+        let ledger = ledger(&env);
+        let outcome = execute(&env, &plan, &selection, Source::Cli, false, Some(&ledger)).unwrap();
+        assert!(outcome.moved.is_empty());
+        assert_eq!(
+            outcome.refused,
+            vec![(
+                outer.path.clone(),
+                format!("contains {}: needs an administrator", inner.path.display())
+            )]
+        );
+        assert!(inner.path.exists());
+        assert!(ledger.list().unwrap().is_empty());
     }
 }

@@ -346,7 +346,7 @@ fn search_locations_names() -> [&'static str; 12] {
 }
 
 /// 目录的直接子项（路径，是不是目录；符号链接不算目录），最多 `limit` 个，超过就一个都不给。
-fn list_entries(dir: &Path, limit: usize) -> Vec<(PathBuf, bool)> {
+pub(crate) fn list_entries(dir: &Path, limit: usize) -> Vec<(PathBuf, bool)> {
     let Ok(read) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
@@ -366,7 +366,7 @@ fn list_entries(dir: &Path, limit: usize) -> Vec<(PathBuf, bool)> {
 }
 
 /// 规则 / cask 点名的路径属于哪一类：看它落在哪个搜索位置下。
-fn kind_for_path(env: &Env, locations: &[SearchLocation], path: &Path) -> LeftoverKind {
+pub(crate) fn kind_for_path(env: &Env, locations: &[SearchLocation], path: &Path) -> LeftoverKind {
     let mut best: Option<&SearchLocation> = None;
     for location in locations {
         if path.starts_with(&location.path)
@@ -533,7 +533,7 @@ fn children_claims(
     out
 }
 
-fn hold_back_for(env: &Env, path: &Path, rivals: &[AppRef]) -> Option<HoldBack> {
+pub(crate) fn hold_back_for(env: &Env, path: &Path, rivals: &[AppRef]) -> Option<HoldBack> {
     if let Some(why) = crate::protect::check(env, path) {
         return Some(HoldBack::Protected { why });
     }
@@ -556,7 +556,7 @@ fn hold_back_for(env: &Env, path: &Path, rivals: &[AppRef]) -> Option<HoldBack> 
 }
 
 /// 这个账号（`me`）动不了它：不是它的所有者；或者父目录动不了（写不了，或者带 sticky 位又不是自己的）。
-fn needs_admin_as(path: &Path, me: u32) -> bool {
+pub(crate) fn needs_admin_as(path: &Path, me: u32) -> bool {
     if std::fs::symlink_metadata(path).is_ok_and(|meta| meta.uid() != me) {
         return true;
     }
@@ -572,7 +572,7 @@ fn needs_admin_as(path: &Path, me: u32) -> bool {
     }
 }
 
-fn accessible(path: &Path, mode: libc::c_int) -> bool {
+pub(crate) fn accessible(path: &Path, mode: libc::c_int) -> bool {
     let Ok(c) = CString::new(path.as_os_str().as_encoded_bytes()) else {
         return false;
     };

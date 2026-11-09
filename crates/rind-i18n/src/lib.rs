@@ -1,12 +1,21 @@
 //! 把 rind-core 的结构化结果翻成人话。zh-CN 默认，en 备用。
 
+mod cleanup;
+mod launch;
+mod orphans;
 mod strings;
+
+pub use cleanup::{describe_cleanup_category, explain_cleanup_category};
+pub use launch::{describe_launch_domain, describe_launch_status};
+pub use orphans::{describe_orphan_signal, describe_orphans_degraded};
 
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
 
 use rind_core::uninstall::ExecuteError;
-use rind_core::{Confidence, Evidence, EvidenceKind, HoldBack, LeftoverKind, ProtectReason, Size};
+use rind_core::{
+    Confidence, Evidence, EvidenceKind, HoldBack, LeftoverKind, ProtectReason, RecordKind, Size,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Lang {
@@ -118,6 +127,17 @@ pub fn describe_evidence(lang: Lang, evidence: &Evidence) -> String {
         }
         (EvidenceKind::Receipt, Lang::ZhCn) => format!("是它的安装收据：{m}"),
         (EvidenceKind::Receipt, Lang::En) => format!("The app's installer receipt: {m}"),
+        (EvidenceKind::Orphan { signal }, _) => {
+            let why = describe_orphan_signal(lang, *signal);
+            if m.is_empty() {
+                why.to_string()
+            } else {
+                match lang {
+                    Lang::ZhCn => format!("{why}：{m}"),
+                    Lang::En => format!("{why}: {m}"),
+                }
+            }
+        }
         (EvidenceKind::Rule { rule }, Lang::ZhCn) => {
             if m.is_empty() {
                 format!("规则库「{rule}」点名了它")
@@ -161,6 +181,20 @@ pub fn describe_hold_back(lang: Lang, hold_back: &HoldBack) -> String {
         }
         (HoldBack::SystemOwned, Lang::ZhCn) => "是 macOS 自己的".to_string(),
         (HoldBack::SystemOwned, Lang::En) => "Belongs to macOS".to_string(),
+        (HoldBack::Contains { path, why }, Lang::ZhCn) => format!(
+            "里面有不能动的东西：{}（{}）",
+            path.display(),
+            describe_hold_back(lang, why)
+        ),
+        (HoldBack::Contains { path, why }, Lang::En) => format!(
+            "Holds something that must stay: {} ({})",
+            path.display(),
+            describe_hold_back(lang, why)
+        ),
+        (HoldBack::InUse { app }, Lang::ZhCn) => format!("{app} 正在运行，退出后重新扫描再清理"),
+        (HoldBack::InUse { app }, Lang::En) => {
+            format!("{app} is running; quit it and scan again to clean this")
+        }
     }
 }
 
@@ -235,6 +269,104 @@ pub fn describe_protect(lang: Lang, reason: ProtectReason) -> &'static str {
     pick(lang, zh, en)
 }
 
+/// `RemovalOutcome.refused` 里的原因（core 写的稳定英文短语，见 `rind_core::remove` 的模块文档）翻成人话。
+/// 认不出的原样返回。
+pub fn describe_refusal(lang: Lang, reason: &str) -> String {
+    use rind_core::remove::{
+        REASON_CHANGED, REASON_CONTAINS, REASON_IN_USE, REASON_NEEDS_ADMIN, REASON_NOT_RESTORABLE,
+        REASON_PROTECTED, REASON_SHARED, REASON_SYSTEM_OWNED, REASON_UNREADABLE,
+    };
+    // 启动项：卸下来了却没移走，原因后面会附一句英文说明（见 `launch::UNLOADED_NOT_MOVED`）。
+    if lang == Lang::ZhCn {
+        if let Some(cut) = reason.find(rind_core::launch::UNLOADED_NOT_MOVED) {
+            let base = describe_refusal(lang, reason[..cut].trim_end_matches([';', ' ']));
+            let note = "已停用，但没能移走";
+            return if base.is_empty() {
+                note.to_string()
+            } else {
+                format!("{base}；{note}")
+            };
+        }
+    }
+    if reason == rind_core::launch::CHANGED_AT_MOVE {
+        return pick(
+            lang,
+            "这个启动项在核对之后又变了，为安全起见没动它，请重新扫描",
+            "The launch item changed again after it was checked; left alone, scan again",
+        )
+        .to_string();
+    }
+    if let Some(name) = reason.strip_prefix(REASON_PROTECTED) {
+        return match serde_json::from_value::<ProtectReason>(serde_json::Value::String(
+            name.to_string(),
+        )) {
+            Ok(why) => match lang {
+                Lang::ZhCn => format!("受保护：{}", describe_protect(lang, why)),
+                Lang::En => format!("Protected: {}", describe_protect(lang, why)),
+            },
+            Err(_) => reason.to_string(),
+        };
+    }
+    if let Some(app) = reason.strip_prefix(REASON_IN_USE) {
+        return match lang {
+            Lang::ZhCn => format!("{app} 正在运行"),
+            Lang::En => format!("{app} is running"),
+        };
+    }
+    if let Some(apps) = reason.strip_prefix(REASON_SHARED) {
+        return match lang {
+            Lang::ZhCn => format!("别的 App 也在用：{apps}"),
+            Lang::En => format!("Also used by {apps}"),
+        };
+    }
+    if let Some(rest) = reason.strip_prefix(REASON_CONTAINS) {
+        // `contains <path>: <reason>`：路径里也可能有 ": "，所以从右边找第一个能认出的原因。
+        let mut cut = rest.len();
+        while let Some(i) = rest[..cut].rfind(": ") {
+            let (path, inner) = (&rest[..i], &rest[i + 2..]);
+            let inner_text = describe_refusal(lang, inner);
+            if inner_text != inner {
+                return match lang {
+                    Lang::ZhCn => format!("里面有不能动的东西：{path}（{inner_text}）"),
+                    Lang::En => format!("Holds something that must stay: {path} ({inner_text})"),
+                };
+            }
+            cut = i;
+        }
+        return match lang {
+            Lang::ZhCn => format!("里面有不能动的东西：{rest}"),
+            Lang::En => format!("Holds something that must stay: {rest}"),
+        };
+    }
+    let (zh, en) = match reason {
+        r if r == REASON_NEEDS_ADMIN => ("需要管理员权限", "Needs an administrator"),
+        r if r == REASON_SYSTEM_OWNED => ("是 macOS 自己的", "Belongs to macOS"),
+        r if r == REASON_UNREADABLE => ("读不了，没有权限", "Can't be read, no permission"),
+        r if r == REASON_CHANGED => (
+            "扫描之后这个路径变了（比如被换成了链接），为安全起见没动它，请重新扫描",
+            "The path changed after the scan (for example, it became a link); left alone, scan again",
+        ),
+        r if r == REASON_NOT_RESTORABLE => (
+            "这个位置 History 放不回来，所以 Rind 不动它；需要的话请在 Finder 里处理",
+            "History could not put it back from here, so Rind leaves it; use Finder if needed",
+        ),
+        _ => return reason.to_string(),
+    };
+    pick(lang, zh, en).to_string()
+}
+
+/// History 记录是哪种操作。
+pub fn describe_record_kind(lang: Lang, kind: RecordKind) -> &'static str {
+    let (zh, en) = match kind {
+        RecordKind::Uninstall => ("卸载", "Uninstall"),
+        RecordKind::Orphans => ("孤儿残留", "Orphaned files"),
+        RecordKind::Cleanup => ("清理", "Cleanup"),
+        RecordKind::Files => ("文件", "Files"),
+        RecordKind::LaunchItems => ("启动项", "Launch items"),
+    };
+    pick(lang, zh, en)
+}
+
 /// `Size::Unknown` → "未知" / "unknown"，否则 `size::format_bytes`。
 pub fn format_size(lang: Lang, size: Size) -> String {
     match size {
@@ -243,7 +375,7 @@ pub fn format_size(lang: Lang, size: Size) -> String {
     }
 }
 
-fn pick(lang: Lang, zh: &'static str, en: &'static str) -> &'static str {
+pub(crate) fn pick(lang: Lang, zh: &'static str, en: &'static str) -> &'static str {
     match lang {
         Lang::ZhCn => zh,
         Lang::En => en,
@@ -579,6 +711,57 @@ mod tests {
                 "{r:?}"
             );
         }
+    }
+
+    #[test]
+    fn refusals_are_translated_by_prefix() {
+        assert_eq!(
+            describe_refusal(Lang::ZhCn, "protected: photo_library"),
+            format!(
+                "受保护：{}",
+                describe_protect(Lang::ZhCn, ProtectReason::PhotoLibrary)
+            )
+        );
+        assert_eq!(
+            describe_refusal(Lang::ZhCn, "in use by Foo"),
+            "Foo 正在运行"
+        );
+        let nested = describe_refusal(
+            Lang::ZhCn,
+            "contains /a: b/c.photoslibrary: protected: photo_library",
+        );
+        assert!(
+            nested.starts_with("里面有不能动的东西：/a: b/c.photoslibrary（受保护："),
+            "{nested}"
+        );
+        for r in [
+            "needs an administrator",
+            "belongs to macOS",
+            "unreadable",
+            "path changed since scan",
+            "outside the places History can put back",
+        ] {
+            assert_ne!(describe_refusal(Lang::ZhCn, r), r);
+            assert_ne!(describe_refusal(Lang::En, r), r);
+        }
+        assert_eq!(
+            describe_refusal(Lang::ZhCn, "something else"),
+            "something else"
+        );
+    }
+
+    #[test]
+    fn an_item_that_would_not_move_keeps_its_base_reason_in_chinese() {
+        let note = rind_core::launch::UNLOADED_NOT_MOVED;
+        let reason = format!("{note}: reloading failed: boom");
+        assert_eq!(describe_refusal(Lang::ZhCn, &reason), "已停用，但没能移走");
+        let appended = format!("in use by Foo; {note}: reloading failed: boom");
+        assert_eq!(
+            describe_refusal(Lang::ZhCn, &appended),
+            "Foo 正在运行；已停用，但没能移走"
+        );
+        // 英文里这句本来就是原文，原样透出去。
+        assert_eq!(describe_refusal(Lang::En, &reason), reason);
     }
 
     #[test]
