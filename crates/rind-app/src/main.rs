@@ -43,7 +43,15 @@ fn main() {
         cx.set_global(CleanupPrefs::default());
         let appearance = std::env::var("RIND_APPEARANCE")
             .ok()
-            .and_then(|value| Appearance::parse(value.trim()))
+            .and_then(|value| {
+                let parsed = Appearance::parse(value.trim());
+                if parsed.is_none() {
+                    eprintln!(
+                        "rind: 不认识 RIND_APPEARANCE={value:?}（想要 system / light / dark），忽略"
+                    );
+                }
+                parsed
+            })
             .or_else(|| {
                 if services.is_demo() {
                     None

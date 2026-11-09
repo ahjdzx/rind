@@ -1,5 +1,5 @@
 //! 界面偏好落盘：目前只有「外观」。文件是 `<data-dir>/appearance`，内容一行 `system` / `light` / `dark`。
-//! 示例模式不读写这个文件；文件不在、读不了、内容认不出来，都按没存过处理。
+//! 示例模式轮到调用方把关（不调用这里）；文件不在、读不了、内容认不出来，都按没存过处理。
 
 use std::path::Path;
 
@@ -17,10 +17,10 @@ pub fn load(data_dir: &Path) -> Option<Appearance> {
 /// 写一次外观偏好。失败的原因交给调用方（只记日志，不打断界面）。
 pub fn save(data_dir: &Path, appearance: Appearance) -> std::io::Result<()> {
     std::fs::create_dir_all(data_dir)?;
-    std::fs::write(
-        data_dir.join(APPEARANCE_FILE),
-        format!("{}\n", appearance.as_str()),
-    )
+    // 先写临时文件再改名：中断在任何时刻，`appearance` 要么是旧值、要么是新值，不会是半截。
+    let tmp = data_dir.join("appearance.tmp");
+    std::fs::write(&tmp, format!("{}\n", appearance.as_str()))?;
+    std::fs::rename(tmp, data_dir.join(APPEARANCE_FILE))
 }
 
 #[cfg(test)]
@@ -40,6 +40,8 @@ mod tests {
             save(&dir, appearance).unwrap();
             assert_eq!(load(&dir), Some(appearance));
         }
+        // 改名后不留临时文件。
+        assert!(!dir.join("appearance.tmp").exists());
         let _ = std::fs::remove_file(dir.join(APPEARANCE_FILE));
     }
 
