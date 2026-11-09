@@ -3,6 +3,7 @@
 //! 外观优先级：`RIND_APPEARANCE=system|light|dark` > 上次在设置里选的那个（存在
 //! `<data-dir>/appearance`）> 跟随系统。示例模式不读盘上的选择。
 //! 语言同理：`RIND_LANG=zh|en` > `<data-dir>/language` > 系统区域设置（`Lang::detect`）。
+//! 两个环境变量都按「去掉空白后为空 = 没设」处理。
 
 mod app;
 mod apps_page;
@@ -43,6 +44,7 @@ fn main() {
         cx.set_global(CleanupPrefs::default());
         let lang = std::env::var("RIND_LANG")
             .ok()
+            .filter(|value| !value.trim().is_empty())
             .and_then(|value| {
                 let parsed = Lang::from_code(&value);
                 if parsed.is_none() {
@@ -61,6 +63,7 @@ fn main() {
         cx.set_global(LangSetting::new(lang));
         let appearance = std::env::var("RIND_APPEARANCE")
             .ok()
+            .filter(|value| !value.trim().is_empty())
             .and_then(|value| {
                 let parsed = Appearance::parse(value.trim());
                 if parsed.is_none() {
