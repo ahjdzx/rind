@@ -1,5 +1,7 @@
 # Rind 设计文档
 
+[English](en/DESIGN.md) | 中文
+
 面向想改它、想学它、或者想知道「为什么是这样」的人。技术分层与数据流在 [ARCHITECTURE.md](ARCHITECTURE.md)，
 这里讲产品与交互上的取舍。
 

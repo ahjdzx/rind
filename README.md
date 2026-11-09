@@ -64,7 +64,7 @@ Light / dark follows the system, or you can pin it in Settings:
 - No account, no telemetry, no background daemon — if you do not press the button, it does
   nothing.
 
-The details (including known limits) are in [docs/SAFETY.md](docs/SAFETY.md) (Chinese).
+The details (including known limits) are in [docs/en/SAFETY.md](docs/en/SAFETY.md).
 
 ## Install
 
@@ -114,7 +114,7 @@ launch    launch list|disable|enable|remove <label>...
 global: --json (for scripts and agents) · --lang zh|en
 ```
 
-Full documentation (Chinese): [docs/USAGE.md](docs/USAGE.md).
+Full documentation: [docs/en/USAGE.md](docs/en/USAGE.md).
 
 ## Rules
 
@@ -124,15 +124,16 @@ build time. Rules can only **add** evidence; they can never bypass a protected a
 
 ## Documentation
 
-All of it is in Chinese for now.
+The manuals and the safety / design documents are bilingual; the architecture and roadmap are
+Chinese-only for now.
 
 | Document | Contents |
 | --- | --- |
-| [docs/USAGE.md](docs/USAGE.md) | Manual: install, UI, every command, file locations, FAQ |
-| [docs/DESIGN.md](docs/DESIGN.md) | Design: goals and non-goals, information architecture, interaction and visuals |
-| [docs/SAFETY.md](docs/SAFETY.md) | Safety model: the single exit, protected areas, History, known limits, how to verify |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical architecture: what happens during an uninstall, module contracts |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones and candidates |
+| [docs/en/USAGE.md](docs/en/USAGE.md) | Manual: install, UI, every command, file locations, FAQ |
+| [docs/en/DESIGN.md](docs/en/DESIGN.md) | Design: goals and non-goals, information architecture, interaction and visuals |
+| [docs/en/SAFETY.md](docs/en/SAFETY.md) | Safety model: the single exit, protected areas, History, known limits, how to verify |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (Chinese) | Technical architecture: what happens during an uninstall, module contracts |
+| [docs/ROADMAP.md](docs/ROADMAP.md) (Chinese) | Milestones and candidates |
 | [CHANGELOG.md](CHANGELOG.md) | Changes per release |
 
 ## Contributing

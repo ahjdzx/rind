@@ -3,6 +3,15 @@
 本文件记录 Rind 每个版本的改动，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布]
+
+### 文档
+
+- 新增英文文档 [docs/en/USAGE.md](docs/en/USAGE.md)、[docs/en/SAFETY.md](docs/en/SAFETY.md)、
+  [docs/en/DESIGN.md](docs/en/DESIGN.md)；英文 README 的文档索引改指英文版
+  （架构与路线图仍为中文，已在表中标注）。
+- 三组文档（使用手册 / 安全模型 / 设计文档）的中英文版本顶部互相加了语言切换链接。
+
 ## [0.2.0] - 2026-11-09
 
 ### 新增

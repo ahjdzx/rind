@@ -1,5 +1,7 @@
 # Rind 使用手册
 
+[English](en/USAGE.md) | 中文
+
 面向使用者：怎么装、怎么用、每个命令做什么、东西放在哪、出问题怎么办。
 想了解它为什么这么设计，看 [DESIGN.md](DESIGN.md)；想知道它保证什么、不保证什么，看 [SAFETY.md](SAFETY.md)。
 

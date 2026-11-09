@@ -1,5 +1,7 @@
 # Rind 的安全模型
 
+[English](en/SAFETY.md) | 中文
+
 这是一个会移动你文件的工具，所以它把「凭什么敢动」写在这里。想上报漏洞请看 [SECURITY.md](../SECURITY.md)。
 
 ## 1. 承诺
