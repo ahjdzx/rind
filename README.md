@@ -15,7 +15,7 @@ areas), [Mole](https://github.com/tw93/Mole) (CLI-first, `--dry-run`),
 its own rules: **explainable, undoable, conservative defaults, and a dry run that equals the
 real run**.
 
-> Status: **0.2.1**. A DMG is available (unsigned — see Install); you can also build from source.
+> Status: **0.2.2**. A DMG is available (unsigned — see Install); you can also build from source.
 
 ## Preview
 
