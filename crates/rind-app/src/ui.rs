@@ -23,6 +23,19 @@ use crate::services::{ExecuteFailure, Services, TrashOp};
 use crate::store::Scans;
 use crate::strings::{self, ui, Key, Lang};
 
+/// Rind 的标志（黄底圆角方格 + R），和 Dock 里的应用图标同一张图。
+/// 图在编译时嵌进二进制（`assets/logo.png`，由 `scripts/make-brand-images.py` 生成），`cargo run` 也看得到。
+pub fn brand_logo(size: Pixels) -> Img {
+    static LOGO: std::sync::OnceLock<Arc<Image>> = std::sync::OnceLock::new();
+    let logo = LOGO.get_or_init(|| {
+        Arc::new(Image::from_bytes(
+            ImageFormat::Png,
+            include_bytes!("../assets/logo.png").to_vec(),
+        ))
+    });
+    img(logo.clone()).size(size).flex_shrink_0()
+}
+
 /// 语气：决定颜色。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tone {

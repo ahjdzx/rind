@@ -187,6 +187,9 @@ pub enum Key {
     SettingsAgeHint,
     ProtectedTitle,
     ProtectedDescription,
+    AboutTitle,
+    AboutDescription,
+    AboutVersion,
 }
 
 impl Key {
@@ -336,6 +339,9 @@ impl Key {
         Key::SettingsAgeHint,
         Key::ProtectedTitle,
         Key::ProtectedDescription,
+        Key::AboutTitle,
+        Key::AboutDescription,
+        Key::AboutVersion,
     ];
 }
 
@@ -345,6 +351,13 @@ pub fn ui(lang: Lang, key: Key) -> &'static str {
     match key {
         AppTitle => t(lang, "app.title"),
         AppTagline => pick(lang, "卸载与清理", "Uninstall & clean up"),
+        AboutTitle => pick(lang, "关于", "About"),
+        AboutDescription => pick(
+            lang,
+            "可解释、可撤销的 macOS 卸载与清理工具：每个文件都说明理由，只移到废纸篓，能从历史一键放回。",
+            "An explainable, undoable macOS uninstaller and cleaner: a reason for every file, Trash only, and one-click put-back from History.",
+        ),
+        AboutVersion => pick(lang, "版本", "Version"),
         DemoBadge => pick(lang, "示例", "Demo"),
         NavOverview => pick(lang, "总览", "Overview"),
         NavGroupClean => pick(lang, "清理", "Clean up"),

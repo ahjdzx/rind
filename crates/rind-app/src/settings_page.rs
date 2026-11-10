@@ -410,6 +410,46 @@ impl SettingsPage {
     }
 }
 
+impl SettingsPage {
+    fn render_about(&self, lang: Lang, cx: &App) -> Div {
+        let muted = ui::muted(cx);
+        Self::section(ui(lang, Key::AboutTitle), IconName::Info, cx).child(
+            h_flex()
+                .gap_4()
+                .items_center()
+                .child(ui::brand_logo(px(56.)))
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .gap_1()
+                        .child(
+                            h_flex()
+                                .gap_2()
+                                .items_baseline()
+                                .child(
+                                    div()
+                                        .text_base()
+                                        .font_semibold()
+                                        .child(ui(lang, Key::AppTitle)),
+                                )
+                                .child(div().text_xs().text_color(muted).child(format!(
+                                    "{} {}",
+                                    ui(lang, Key::AboutVersion),
+                                    env!("CARGO_PKG_VERSION")
+                                ))),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(muted)
+                                .child(ui(lang, Key::AboutDescription)),
+                        ),
+                ),
+        )
+    }
+}
+
 impl Render for SettingsPage {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let lang = strings::lang(cx);
@@ -433,7 +473,8 @@ impl Render for SettingsPage {
                         .gap_4()
                         .child(self.render_general(lang, cx))
                         .child(self.render_cleanup(lang, cx))
-                        .child(self.render_protected(lang, cx)),
+                        .child(self.render_protected(lang, cx))
+                        .child(self.render_about(lang, cx)),
                 ),
         )
     }

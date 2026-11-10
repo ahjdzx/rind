@@ -2,7 +2,8 @@
 # 把桌面应用打成可分发的 Rind.app，再封成 DMG。
 #
 # 用法：scripts/package-dmg.sh [输出目录]     （默认 target/dmg）
-# 依赖：macOS（hdiutil / codesign）、Rust 工具链；版本号取自工作区 Cargo.toml。
+# 依赖：macOS（hdiutil / codesign / sips / iconutil）、Rust 工具链；版本号取自工作区 Cargo.toml。
+# 图标来自 assets/AppIcon-1024.png（scripts/make-brand-images.py 生成），这里转成 AppIcon.icns。
 # 产物：<输出目录>/Rind-v<版本>.dmg（内含 Rind.app 与 /Applications 快捷方式）。
 #
 # 注意：这里只做 ad-hoc 签名（codesign --sign -）。没有 Developer ID，下载后首次
@@ -30,8 +31,21 @@ fi
 APP="$OUT/Rind.app"
 STAGE="$OUT/stage"
 rm -rf "$APP" "$STAGE"
-mkdir -p "$APP/Contents/MacOS" "$STAGE"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$STAGE"
 cp "$BIN" "$APP/Contents/MacOS/rind-app"
+
+echo "==> 生成图标"
+ICON_SRC="assets/AppIcon-1024.png"
+ICONSET="$OUT/AppIcon.iconset"
+rm -rf "$ICONSET"
+mkdir -p "$ICONSET"
+for size in 16 32 128 256 512; do
+  sips -z "$size" "$size" "$ICON_SRC" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+  double=$((size * 2))
+  sips -z "$double" "$double" "$ICON_SRC" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil --convert icns "$ICONSET" --output "$APP/Contents/Resources/AppIcon.icns"
+rm -rf "$ICONSET"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -42,6 +56,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 	<key>CFBundleIdentifier</key><string>dev.rind.Rind</string>
 	<key>CFBundleName</key><string>Rind</string>
 	<key>CFBundleDisplayName</key><string>Rind</string>
+	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleShortVersionString</key><string>$VERSION</string>
 	<key>CFBundleVersion</key><string>$VERSION</string>

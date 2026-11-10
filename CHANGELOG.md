@@ -5,6 +5,12 @@
 
 ## [未发布]
 
+### 界面
+
+- 应用有了自己的图标：`Rind.app` 里带上 `AppIcon.icns`（黄底圆角方格 + R，按 macOS 图标网格留边、带投影），
+  Dock、Finder、启动台不再是空白图标。打包脚本用 `sips` + `iconutil` 从 `assets/AppIcon-1024.png` 生成。
+- 侧栏顶部的标志换成同一个图标（原来是通用的 Lucide 图标）；设置页底部新增「关于」：图标、版本号和一句介绍。
+
 ### 文档
 
 - 新增英文文档 [docs/en/USAGE.md](docs/en/USAGE.md)、[docs/en/SAFETY.md](docs/en/SAFETY.md)、

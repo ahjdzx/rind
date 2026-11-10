@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""生成品牌图：docs/images/icon-256.png、icon-512.png、social-preview.png。
+"""生成品牌图：docs/images/icon-256.png、icon-512.png、social-preview.png，
+以及应用自己用的 assets/AppIcon-1024.png（打包时转成 .icns）和
+crates/rind-app/assets/logo.png（界面里的标志）。
 
 依赖 Pillow（`python3 -m pip install pillow`）与 macOS 自带字体
 （SF Rounded / SF / SF Mono）。文件在任意位置跑都可以，输出落在仓库
@@ -8,6 +10,10 @@ docs/images/ 下：
 - icon-*：黄底圆角方格 + 深色 "R"。给 awesome 列表的 icon_url 用。
 - social-preview.png：1280x640，供 GitHub 仓库 Settings -> Social preview
   手动上传（API 不支持设置社交预览图）。
+- AppIcon-1024.png：按 macOS 应用图标网格画——1024 画布里方格占 824、四周留 100，
+  带一层柔和投影，放进 Dock 时和系统 App 一样大。`scripts/package-dmg.sh` 用
+  sips + iconutil 把它转成 AppIcon.icns。
+- logo.png：不留边、不带投影的方格（256px），界面侧栏和设置页里显示。
 
 用法：python3 scripts/make-brand-images.py
 """
@@ -15,10 +21,12 @@ docs/images/ 下：
 import math
 import pathlib
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 OUT_DIR = REPO / "docs" / "images"
+APP_ICON = REPO / "assets" / "AppIcon-1024.png"
+LOGO = REPO / "crates" / "rind-app" / "assets" / "logo.png"
 
 INK = (11, 11, 12, 255)  # 近黑，跟应用深色主题一致
 TILE_TOP = (255, 214, 74)
@@ -67,6 +75,23 @@ def render_icon(size: int) -> Image.Image:
     f = font(SF_ROUNDED, int(s * 0.60), "Bold")
     d.text((s * 0.502, s * 0.508), "R", font=f, fill=INK, anchor="mm")
     return tile.resize((size, size), Image.LANCZOS)
+
+
+def render_app_icon() -> Image.Image:
+    """macOS 应用图标网格：1024 画布，824 的方格居中，下方一层柔和投影。"""
+    canvas, tile_size, margin = 1024, 824, 100
+    img = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+    shadow = Image.new("L", (canvas, canvas), 0)
+    ImageDraw.Draw(shadow).rounded_rectangle(
+        [margin, margin + 12, margin + tile_size, margin + tile_size + 12],
+        radius=int(tile_size * 0.235),
+        fill=90,
+    )
+    shadow = shadow.filter(ImageFilter.GaussianBlur(14))
+    img.paste(Image.new("RGBA", (canvas, canvas), (0, 0, 0, 255)), (0, 0), shadow)
+    tile = render_icon(tile_size)
+    img.alpha_composite(tile, (margin, margin))
+    return img
 
 
 def radial_glow(size: tuple[int, int], center: tuple[float, float], radius: float, color: tuple[int, int, int], peak: float) -> Image.Image:
@@ -119,8 +144,12 @@ def main() -> None:
     for size in (256, 512):
         render_icon(size).save(OUT_DIR / f"icon-{size}.png")
     render_social().save(OUT_DIR / "social-preview.png")
-    for name in ("icon-256.png", "icon-512.png", "social-preview.png"):
-        p = OUT_DIR / name
+    APP_ICON.parent.mkdir(parents=True, exist_ok=True)
+    render_app_icon().save(APP_ICON)
+    LOGO.parent.mkdir(parents=True, exist_ok=True)
+    render_icon(256).save(LOGO)
+    outputs = [OUT_DIR / n for n in ("icon-256.png", "icon-512.png", "social-preview.png")]
+    for p in outputs + [APP_ICON, LOGO]:
         print(f"{p.relative_to(REPO)}  {p.stat().st_size:,} bytes")
 
 

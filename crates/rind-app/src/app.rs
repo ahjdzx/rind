@@ -225,21 +225,11 @@ impl RindApp {
     }
 
     fn render_brand(&self, lang: Lang, cx: &App) -> impl IntoElement {
-        let primary = cx.theme().primary;
         h_flex()
             .w_full()
             .gap_2p5()
             .pb_1()
-            .child(
-                h_flex()
-                    .flex_shrink_0()
-                    .size(px(30.))
-                    .justify_center()
-                    .rounded(cx.theme().radius_lg)
-                    .bg(primary)
-                    .text_color(cx.theme().primary_foreground)
-                    .child(Icon::new(IconName::Citrus).small()),
-            )
+            .child(crate::ui::brand_logo(px(30.)))
             .child(
                 v_flex()
                     .flex_1()
