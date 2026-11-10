@@ -6,6 +6,7 @@
 //! 两个环境变量都按「去掉空白后为空 = 没设」处理。
 
 mod app;
+mod app_assets;
 mod apps_page;
 mod cleanup_page;
 mod demo;
@@ -60,7 +61,7 @@ fn main() {
     let lang = resolve_lang(demo);
     let services = Arc::new(Services::new(demo, lang));
 
-    let app = gpui_kit::application().with_assets(gpui_kit::assets::Assets);
+    let app = gpui_kit::application().with_assets(app_assets::AppAssets);
     app.run(move |cx| {
         gpui_kit::init(cx);
         cx.set_global(CleanupPrefs::default());
