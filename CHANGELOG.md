@@ -5,6 +5,8 @@
 
 ## [未发布]
 
+## [0.2.1] - 2026-11-10
+
 ### 界面
 
 - 应用有了自己的图标：`Rind.app` 里带上 `AppIcon.icns`（黄底圆角方格 + R，按 macOS 图标网格留边、带投影），
@@ -96,5 +98,7 @@ universal（arm64 + Intel）构建、首次运行的「完全磁盘访问」引�
 - 目录里的媒体库 / 钱包探测往下 6 层、最多 20 万个条目；更深处的东西不会拦，见 [docs/SAFETY.md](docs/SAFETY.md)。
 - 没有预编译产物，也没有更新器：得自己 `git pull` 后重新构建。
 
-[未发布]: https://github.com/ahjdzx/rind/compare/v0.1.0...HEAD
+[未发布]: https://github.com/ahjdzx/rind/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/ahjdzx/rind/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/ahjdzx/rind/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ahjdzx/rind/releases/tag/v0.1.0

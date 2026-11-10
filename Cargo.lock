@@ -5405,7 +5405,7 @@ dependencies = [
 
 [[package]]
 name = "rind-app"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5418,7 +5418,7 @@ dependencies = [
 
 [[package]]
 name = "rind-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5432,7 +5432,7 @@ dependencies = [
 
 [[package]]
 name = "rind-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5457,7 +5457,7 @@ dependencies = [
 
 [[package]]
 name = "rind-i18n"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "rind-core",
  "serde",
