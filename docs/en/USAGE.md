@@ -12,7 +12,7 @@ guarantees and what it does not, see [SAFETY.md](SAFETY.md).
 - macOS. Development and verification happen on macOS 26 (Tahoe) / Apple Silicon; older systems
   and Intel machines are untested.
 - Running it does not require a full Xcode (the interface uses Metal shaders compiled at runtime).
-- Building from source requires Rust **1.85+** (verified locally with stable 1.99).
+- Building from source requires Rust **1.89+** (verified locally with stable 1.99).
 
 ## 2. Install
 
@@ -181,8 +181,10 @@ cannot be acted on.
   and cleanable-space totals.
 - **Do not use `--all` instead of judgement**: `--all` also includes "possible / shared /
   unreadable", which is a safety net for humans, not a default.
-- Exit codes: `0` means success (including an empty result like "nothing could be moved", which
-  will be explained); anything else means an error, with the reason on stderr.
+- Exit codes: `0` means success; `1` means a runtime error or some items were refused / failed;
+  `2` means an argument error; `3` means there was nothing to move or the user cancelled.
+  A rehearsal with any refusal is also `1`. With `--json`, errors are on stdout as
+  `{"error":...}`; otherwise they are on stderr.
 
 ## 7. Where files live
 

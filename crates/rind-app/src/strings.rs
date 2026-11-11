@@ -847,12 +847,16 @@ pub fn other_items(lang: Lang, n: u64) -> String {
     say(lang, format!("其余 {n} 项"), format!("{n} more items"))
 }
 
-/// "有 2 个目录读不了，没有算进去。"
+/// "有 2 个目录读不了，没有算进去。给终端或 Rind 授予「完全磁盘访问」后重新扫描。"
 pub fn unreadable_dirs(lang: Lang, n: usize) -> String {
     say(
         lang,
-        format!("有 {n} 个目录读不了（权限不够），没有算进大小里。"),
-        format!("{n} folders could not be read (no permission) and are not counted."),
+        format!(
+            "有 {n} 个目录读不了（权限不够），没有算进大小里。给终端或 Rind 授予「完全磁盘访问」后重新扫描。"
+        ),
+        format!(
+            "{n} folders could not be read (no permission) and are not counted. Grant Full Disk Access to your terminal or to Rind, then scan again."
+        ),
     )
 }
 

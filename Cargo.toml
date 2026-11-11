@@ -3,11 +3,11 @@ resolver = "2"
 members = ["crates/rind-core", "crates/rind-i18n", "crates/rind-cli", "crates/rind-app"]
 
 [workspace.package]
-version = "0.2.3"
+version = "0.2.4"
 edition = "2021"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/ahjdzx/rind"
-rust-version = "1.85"
+rust-version = "1.89"
 
 [workspace.dependencies]
 rind-core = { path = "crates/rind-core" }

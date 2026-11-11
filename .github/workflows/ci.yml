@@ -35,9 +35,25 @@ jobs:
         run: cargo fmt --all --check
 
       - name: Clippy
-        run: cargo clippy --workspace --exclude rind-app --all-targets -- -D warnings
+        run: cargo clippy --workspace --exclude rind-app --all-targets --locked -- -D warnings
 
       - name: 测试
-        run: cargo test --workspace --exclude rind-app
+        run: cargo test --workspace --exclude rind-app --locked
         env:
           RUST_BACKTRACE: 1
+
+  msrv:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust 1.89
+        uses: dtolnay/rust-toolchain@1.89
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv
+
+      - name: 检查 MSRV
+        run: cargo check --workspace --exclude rind-app --all-targets --locked

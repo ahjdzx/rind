@@ -3,7 +3,34 @@
 本文件记录 Rind 每个版本的改动，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [未发布]
+## [0.2.4] - 2026-11-11
+
+### 安全
+
+- App 扫描不再把 `codesign` 显示出来的 Team ID 和 App Group 当事实：现在先验证签名链
+  到 Apple，验证不过就丢弃这两类证据。伪造签名内容不能再帮助残留匹配。
+- 卸载的 `--dry-run` 和真跑共用同一次子孙探测，包含照片 / 音乐库或钱包 profile 的目录
+  在预演里也会拒绝，不再出现「预演能移、真跑拒绝」。
+
+### 清理
+
+- 开发产物也检查运行中的进程：`vite` / `esbuild` 这类从 `node_modules` 里运行的进程、
+  从 `target` 里运行的构建工具会挡住对应产物；进程列表读不到时同样不建议。
+- 新增 Google Chrome 的显式规则，把放在 `Google/Chrome` 下的主资料目录标成确定属于它。
+
+### CLI
+
+- `rind launch list | head` 等管道提前关闭时不再 panic，退出码也不会变成 101。
+- 扫描进度只在 stderr 是终端时输出，重定向到文件或管道不再夹进 ANSI 控制字符。
+- 退出码契约修正：`0` 成功；`1` 运行错误或部分项被拒绝 / 失败；`2` 参数错误；
+  `3` 没有要动的项或用户取消。空结果不再和参数错误共用 `2`。
+
+### 工程
+
+- MSRV 从声明的 1.85 改成实际的 1.89，并让四个 crate 都继承 `rust-version`；CI 新增 MSRV
+  job，现有检查加 `--locked`。
+- Release 在打 DMG 前先跑整个工作区的 release clippy 和测试，不再只构建不验证。
+- 空间分析里「读不了」的提示会直接给出授予「完全磁盘访问」并重新扫描的下一步。
 
 ## [0.2.3] - 2026-11-11
 
@@ -119,7 +146,8 @@ universal（arm64 + Intel）构建、首次运行的「完全磁盘访问」引�
 - 目录里的媒体库 / 钱包探测往下 6 层、最多 20 万个条目；更深处的东西不会拦，见 [docs/SAFETY.md](docs/SAFETY.md)。
 - 没有预编译产物，也没有更新器：得自己 `git pull` 后重新构建。
 
-[未发布]: https://github.com/ahjdzx/rind/compare/v0.2.3...HEAD
+[未发布]: https://github.com/ahjdzx/rind/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/ahjdzx/rind/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/ahjdzx/rind/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/ahjdzx/rind/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/ahjdzx/rind/compare/v0.2.0...v0.2.1

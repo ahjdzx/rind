@@ -1,0 +1,26 @@
+# Google Chrome。主资料目录放在厂商目录里，名字不是 bundle id，所以要显式点名。
+bundle_id = "com.google.Chrome"
+name = "Google Chrome"
+aliases = ["Chrome"]
+
+[[paths]]
+path = "~/Library/Application Support/Google/Chrome"
+confidence = "certain"
+note = "浏览器 profile、扩展与登录态"
+
+[[paths]]
+path = "~/Library/Caches/Google/Chrome"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Preferences/com.google.Chrome.plist"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Saved Application State/com.google.Chrome.savedState"
+confidence = "certain"
+
+[[paths]]
+path = "~/Library/Google/Google Chrome*"
+confidence = "likely"
+note = "更新器和崩溃报告目录"

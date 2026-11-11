@@ -528,7 +528,12 @@ pub fn scan(
     // 进程列表只取一次，而且只在有类别要看"在不在运行"时才取。
     let exes = match &opts.running_executables {
         Some(exes) => exes.clone(),
-        None if [AppCaches, BrowserCaches, Xcode].into_iter().any(wanted) => process_executables(),
+        None if [AppCaches, BrowserCaches, Xcode, DevArtifacts]
+            .into_iter()
+            .any(wanted) =>
+        {
+            process_executables()
+        }
         None => Vec::new(),
     };
     let running = Running::new(all_apps, exes);
@@ -1080,7 +1085,8 @@ fn in_use_of(
                 .and_then(|b| running.owner(&b.owner))
         }
         Xcode => running.owner(&XCODE),
-        Logs | PackageCaches | DevArtifacts => None,
+        Logs | PackageCaches => None,
+        DevArtifacts => running.artifact_in_use(path),
     }
 }
 
@@ -1174,10 +1180,10 @@ impl<'a> Running<'a> {
         }
     }
 
-    /// 进程列表取不到，说不清这一类的主人在不在运行：应用缓存、浏览器缓存、Xcode 不建议。
+    /// 进程列表取不到，说不清这一类的主人在不在运行：应用缓存、浏览器缓存、Xcode、开发产物不建议。
     fn unsure_about(&self, category: CleanupCategory) -> bool {
         use CleanupCategory::*;
-        self.exes.is_empty() && matches!(category, AppCaches | BrowserCaches | Xcode)
+        self.exes.is_empty() && matches!(category, AppCaches | BrowserCaches | Xcode | DevArtifacts)
     }
 
     /// 名字等于某个运行中 bundle 的 id、或以 `id.` 开头（不分大小写），给出那个程序的名字。
@@ -1211,6 +1217,16 @@ impl<'a> Running<'a> {
                 .unwrap_or_else(|| file.clone());
             (file.to_lowercase() == lower || stem.to_lowercase() == lower).then_some(stem)
         })
+    }
+
+    /// 开发产物被正在运行的进程使用吗？进程的可执行文件在产物目录下面就算（`vite` / `esbuild`
+    /// 在 `node_modules` 里，cargo / rustc 在 `target` 里）。
+    fn artifact_in_use(&self, artifact: &Path) -> Option<String> {
+        self.exes
+            .iter()
+            .find(|exe| exe.starts_with(artifact))
+            .and_then(|exe| exe.file_stem())
+            .map(|stem| stem.to_string_lossy().into_owned())
     }
 
     fn owner(&self, owner: &Owner) -> Option<String> {
@@ -2595,9 +2611,9 @@ mod tests {
             assert!(!items.is_empty(), "{category:?} still listed");
             assert!(items.iter().all(|i| !i.suggested), "{category:?}");
         }
-        // 不看运行状态的类别不受影响。
+        // 开发产物在进程列表未知时也不建议；其它不看运行状态的类别不受影响。
         assert!(item(&report, &f.env.home.join(".npm/_cacache")).suggested);
-        assert!(item(&report, &f.projects.join("old/target")).suggested);
+        assert!(!item(&report, &f.projects.join("old/target")).suggested);
     }
 
     #[test]

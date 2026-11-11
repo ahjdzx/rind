@@ -301,9 +301,9 @@ fn uninstall_records_history_and_restore_puts_everything_back() {
     let (_, history) = fx.json(&["history", "--json"]);
     assert_eq!(history[0]["restored"], serde_json::Value::Bool(true));
 
-    // 再放一次：没有东西可放，退出码 2。
+    // 再放一次：没有东西可放，退出码 3。
     let output = fx.run(&["restore", &short]);
-    assert_eq!(output.status.code(), Some(2), "{}", stdout(&output));
+    assert_eq!(output.status.code(), Some(3), "{}", stdout(&output));
 }
 
 #[test]
@@ -682,10 +682,10 @@ fn orphans_json_has_groups_and_selection() {
     assert!(value["selected"].is_array(), "{value}");
     assert!(value["selected_size"].is_u64(), "{value}");
 
-    // 预演：输出一个移动结果文档（没选中任何东西时退出码 2），什么都不动。
+    // 预演：输出一个移动结果文档（没选中任何东西时退出码 3），什么都不动。
     let (output, value) = fx.json(&["orphans", "--trash", "--dry-run", "--json"]);
     assert!(
-        matches!(output.status.code(), Some(0) | Some(2)),
+        matches!(output.status.code(), Some(0) | Some(3)),
         "{}",
         stderr(&output)
     );

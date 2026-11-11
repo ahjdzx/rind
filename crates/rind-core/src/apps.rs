@@ -266,7 +266,12 @@ fn read_app_with(
     let (team_id, app_groups) = if is_system {
         (None, Vec::new())
     } else {
-        signing_info(path)
+        let info = signing_info(path);
+        if signature_is_trusted(path) {
+            info
+        } else {
+            (None, Vec::new())
+        }
     };
 
     let source = if has_mas_receipt {
@@ -857,6 +862,12 @@ mod tests {
         let env = Env::for_test(dir.path());
         let app = make_app(&env.app_dirs[0], "Foo", "com.acme.foo");
         assert!(!signature_is_trusted(&app));
+        let read = read_app(&env, &app).unwrap();
+        assert_eq!(read.team_id, None, "untrusted signing claims are ignored");
+        assert!(
+            read.app_groups.is_empty(),
+            "untrusted entitlements are ignored"
+        );
         assert!(
             signature_is_trusted(Path::new("/System/Applications/Calculator.app"))
                 || !Path::new("/System/Applications/Calculator.app").exists()

@@ -227,7 +227,7 @@ fn move_selected(
         } else {
             out.note(rind_i18n::t(out.lang, "state.nothing_selected"));
         }
-        return Ok(ExitCode::from(2));
+        return Ok(ExitCode::from(EXIT_NOTHING));
     }
     if confirm.dry_run {
         let result = remove::trash_items(env, batch, candidates, selected, true, None);
@@ -239,7 +239,7 @@ fn move_selected(
         .filter_map(|c| c.size.known())
         .sum();
     if !ask(out, confirm, selected.len(), freed)? {
-        return Ok(ExitCode::from(2));
+        return Ok(ExitCode::from(EXIT_NOTHING));
     }
     let ledger = Ledger::open(env)?;
     let result = remove::trash_items(env, batch, candidates, selected, false, Some(&ledger));
@@ -253,6 +253,9 @@ fn ask(out: &Render, confirm: &Confirm, count: usize, freed: u64) -> Result<bool
     out.note(&say(out.lang, "没有动任何东西。", "Nothing was moved."));
     Ok(false)
 }
+
+/// 没有要动的项、用户没确认：不是错误，但和成功区分开。
+const EXIT_NOTHING: u8 = 3;
 
 /// 报结果。有拒绝或失败的退出码 1；History 写一半的照样把已移的说清楚。
 fn finish(
@@ -659,7 +662,7 @@ pub fn launch(env: &Env, out: &Render, action: LaunchAction) -> Result<ExitCode>
                 return finish(env, out, result, Vec::new());
             }
             if !ask(out, &confirm, selected.len(), 0)? {
-                return Ok(ExitCode::from(2));
+                return Ok(ExitCode::from(EXIT_NOTHING));
             }
             let ledger = Ledger::open(env)?;
             let result = launch::remove(env, &items, &selected, Source::Cli, false, Some(&ledger));

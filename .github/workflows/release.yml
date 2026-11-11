@@ -31,6 +31,11 @@ jobs:
           v=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)
           [ "$GITHUB_REF_NAME" = "v$v" ] || { echo "tag $GITHUB_REF_NAME 与 Cargo.toml 的 v$v 不一致" >&2; exit 1; }
 
+      - name: 发布前检查
+        run: |
+          cargo clippy --workspace --all-targets --locked --release -- -D warnings
+          cargo test --workspace --locked --release
+
       - name: 打 DMG
         run: scripts/package-dmg.sh
 

@@ -5,7 +5,7 @@
 ## 开发环境
 
 - macOS（开发与测试都在 macOS 26 / Apple Silicon 上；更老的系统没验证过）
-- Rust **1.85+**（`rust-toolchain.toml` 跟 stable 走）
+- Rust **1.89+**（`rust-toolchain.toml` 跟 stable 走）
 - 不需要完整 Xcode：Command Line Tools + Rust 就够（界面用运行时编译的 Metal shader）
 
 ```sh

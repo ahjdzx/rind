@@ -3,7 +3,7 @@
 mod maintain;
 mod render;
 
-use std::io::{self, BufRead, Write};
+use std::io::{self, BufRead, IsTerminal, Write};
 use std::process::ExitCode;
 
 use anyhow::{anyhow, bail, Result};
@@ -211,12 +211,20 @@ fn parse_lang(s: &str) -> std::result::Result<Lang, String> {
     }
 }
 
+/// 没有要动的项、用户没确认：不是错误，但和成功区分开。
+const EXIT_NOTHING: u8 = 3;
+
 fn main() -> ExitCode {
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
     let cli = Cli::parse();
     let lang = cli.lang.unwrap_or_else(Lang::detect);
     let out = Render {
         lang,
         json: cli.json,
+        progress: !cli.json && io::stderr().is_terminal(),
     };
     match run(cli.command, &out) {
         Ok(code) => code,
@@ -283,7 +291,7 @@ fn run(command: Command, out: &Render) -> Result<ExitCode> {
             }
             if !selection.include_app && selection.paths.is_empty() {
                 out.note(rind_i18n::t(out.lang, "state.nothing_selected"));
-                return Ok(ExitCode::from(2));
+                return Ok(ExitCode::from(EXIT_NOTHING));
             }
             if dry_run {
                 let outcome = uninstall::execute(&env, &plan, &selection, Source::Cli, true, None)?;
@@ -298,7 +306,7 @@ fn run(command: Command, out: &Render) -> Result<ExitCode> {
                 )?
             {
                 out.note(&say(out.lang, "没有动任何东西。", "Nothing was moved."));
-                return Ok(ExitCode::from(2));
+                return Ok(ExitCode::from(EXIT_NOTHING));
             }
             let ledger = Ledger::open(&env)?;
             match uninstall::execute(&env, &plan, &selection, Source::Cli, false, Some(&ledger)) {
@@ -366,7 +374,7 @@ fn run(command: Command, out: &Render) -> Result<ExitCode> {
             // 一项都没放回去（废纸篓里没了、原位被占……）：退出码说明没达成。
             Ok(
                 if outcome.restored.is_empty() && !outcome.skipped.is_empty() {
-                    ExitCode::from(2)
+                    ExitCode::from(EXIT_NOTHING)
                 } else {
                     ExitCode::SUCCESS
                 },

@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use crate::history::Ledger;
 use crate::leftovers::{self, ScanOptions};
-use crate::remove::{plan_moves, refusal, Batch, Moved, Mover};
+use crate::remove::{plan_moves, pretend_checked, refusal, Batch, Moved, Mover};
 use crate::rules::RuleSet;
 use crate::{
     protect, running, size, Env, HoldBack, InstalledApp, RecordKind, RemovalOutcome, ScanProgress,
@@ -169,7 +169,7 @@ pub fn execute(
             outcome.freed += size.known().unwrap_or(0);
         }
         for planned in &queue {
-            planned.pretend(&mut outcome);
+            pretend_checked(env, planned, &mut outcome);
         }
         return Ok(outcome);
     }

@@ -13,7 +13,7 @@
 [Pearcleaner](https://github.com/alienator88/Pearcleaner) 的长处，然后按自己的规矩重做：
 **可解释、可撤销、保守默认、预演等于真跑**。
 
-> 状态：**0.2.3**。有 DMG 可以装（未签名，见「安装」），也可以从源码构建。
+> 状态：**0.2.4**。有 DMG 可以装（未签名，见「安装」），也可以从源码构建。
 
 ## 预览
 
@@ -64,7 +64,7 @@
 **没有 Developer ID 签名与公证**——第一次打开需要右键 →「打开」，之后就正常了。
 要求 macOS 14+（开发与验证都在 macOS 26）。Intel 机器没有验证过。
 
-**从源码构建**：需要 macOS 与 Rust 1.85+。**不需要完整 Xcode**（GPUI 用运行时编译的 Metal shader）。
+**从源码构建**：需要 macOS 与 Rust 1.89+。**不需要完整 Xcode**（GPUI 用运行时编译的 Metal shader）。
 
 ```sh
 git clone git@github.com:ahjdzx/rind.git

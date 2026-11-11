@@ -24,6 +24,7 @@ use crate::maintain::{Status, Tally};
 pub struct Render {
     pub lang: Lang,
     pub json: bool,
+    pub progress: bool,
 }
 
 /// CLI 自己的零散文案：中文和英文各一句。
@@ -67,7 +68,7 @@ impl Render {
 
     /// 扫描进度走 stderr，这样 stdout 永远只有结果。
     pub fn progress(&self, progress: &ScanProgress) {
-        if self.json {
+        if !self.progress {
             return;
         }
         let mut err = io::stderr().lock();

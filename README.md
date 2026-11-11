@@ -15,7 +15,7 @@ areas), [Mole](https://github.com/tw93/Mole) (CLI-first, `--dry-run`),
 its own rules: **explainable, undoable, conservative defaults, and a dry run that equals the
 real run**.
 
-> Status: **0.2.3**. A DMG is available (unsigned — see Install); you can also build from source.
+> Status: **0.2.4**. A DMG is available (unsigned — see Install); you can also build from source.
 
 ## Preview
 
@@ -77,7 +77,7 @@ with a Developer ID** — the first launch needs right-click → Open, after tha
 normally. Requires macOS 14+ (development and testing happen on macOS 26). Intel Macs are
 untested.
 
-**Build from source**: needs macOS and Rust 1.85+. A full Xcode is **not** required
+**Build from source**: needs macOS and Rust 1.89+. A full Xcode is **not** required
 (GPUI compiles its Metal shaders at runtime).
 
 ```sh

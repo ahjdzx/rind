@@ -154,7 +154,7 @@ impl Planned {
 /// 预演也要走一遍真跑才做的检查：解析真实路径、看目录里有没有不能一起带走的东西（照片 / 音乐库、
 /// 带钱包的浏览器 profile）。不然 `--dry-run --json` 会说"要移动"，真跑却拒绝——按预演做决定的脚本就被骗了。
 /// 外层被拒时和真跑一样：把它下面一起选中的内层重新单独排一遍。
-fn pretend_checked(env: &Env, planned: &Planned, outcome: &mut RemovalOutcome) {
+pub(crate) fn pretend_checked(env: &Env, planned: &Planned, outcome: &mut RemovalOutcome) {
     let before = std::fs::symlink_metadata(&planned.path).ok();
     let real = match preflight(env, &planned.path) {
         Ok(real) => real,
