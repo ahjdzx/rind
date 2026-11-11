@@ -2,6 +2,8 @@
 # 重拍 README 与文档用的界面截图和 demo.gif：docs/images/{en,zh}/。
 #
 # 用法：scripts/capture-screenshots.sh [en|zh ...]      （默认两种语言都拍）
+#       RIND_SHOT_PAGES="launch settings" scripts/capture-screenshots.sh   只重拍这几页
+#       （overview-light 也算一页）；demo.gif 总是用目录里现有的全部截图重新合成。
 # 依赖：macOS（screencapture / sips / osascript）、ffmpeg（生成 GIF）、Rust 工具链。
 #
 # 全程走示例数据（RIND_DEMO=1），不读也不碰真实家目录。每页单独起一次应用：
@@ -15,6 +17,8 @@ cd "$(dirname "$0")/.."
 LANGS="${*:-en zh}"
 WAIT="${RIND_SHOT_WAIT:-7}"   # 每页等多久再拍（秒）：示例扫描与图标加载要跑完
 PAGES="overview apps orphans cleanup space launch history settings"
+ONLY="${RIND_SHOT_PAGES:-$PAGES overview-light}"
+wanted() { case " $ONLY " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 TARGET="${CARGO_TARGET_DIR:-target}"
 BIN="$TARGET/release/rind-app"
 WORK="$(mktemp -d)"
@@ -59,9 +63,9 @@ for lang in $LANGS; do
   mkdir -p "$out"
   echo "==> $lang"
   for page in $PAGES; do
-    shot "$lang" "$page" dark "$out/$page.jpg"
+    if wanted "$page"; then shot "$lang" "$page" dark "$out/$page.jpg"; fi
   done
-  shot "$lang" overview light "$out/overview-light.jpg"
+  if wanted overview-light; then shot "$lang" overview light "$out/overview-light.jpg"; fi
 
   # demo.gif：九张图依次展示，每张 1.4 秒，宽 1400。
   frames="$WORK/frames-$lang"

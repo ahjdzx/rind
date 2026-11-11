@@ -52,7 +52,7 @@ rind/
    判断按**盘上的真实身份**而不是字符串：路径先 `canonicalize`（APFS 不区分大小写，`~/library/keychains` 和 `~/Library/Keychains`
    是同一处），叶子是符号链接时不跟随叶子、只解析父目录；相对路径、含 `..`、解析不了的一律按保护处理（`Unresolvable`）。
    钱包检测找不到定论时也按有钱包处理（fail closed）。root 所有的文件，或父目录带 sticky 位且不属于当前用户的
-   （如 `/Library/LaunchDaemons`、`/Library/Caches`），在 MVP 里记为 `NeedsAdmin`，列出但不移动。
+   （如 `/Library/LaunchDaemons`、`/Library/Caches`），记为 `NeedsAdmin`，列出但不移动（Rind 不申请提权，见 ROADMAP「明确不做」）。
 7. **移动**（`uninstall::execute` → `trash`）：
    - 冻结 `Selection`，只移动计划里有的路径。
    - 不是预演就必须有 History 可写（`LedgerRequired`），否则一个都不动。

@@ -196,10 +196,8 @@ pub fn describe_hold_back(lang: Lang, hold_back: &HoldBack) -> String {
         }
         (HoldBack::Unreadable, Lang::ZhCn) => "读不了，没有权限".to_string(),
         (HoldBack::Unreadable, Lang::En) => "Can't be read, no permission".to_string(),
-        (HoldBack::NeedsAdmin, Lang::ZhCn) => "需要管理员权限，这一版先不动它".to_string(),
-        (HoldBack::NeedsAdmin, Lang::En) => {
-            "Needs an administrator; left alone for now".to_string()
-        }
+        (HoldBack::NeedsAdmin, Lang::ZhCn) => "需要管理员权限，只列出、不移动".to_string(),
+        (HoldBack::NeedsAdmin, Lang::En) => "Needs admin rights; listed, never moved".to_string(),
         (HoldBack::SystemOwned, Lang::ZhCn) => "是 macOS 自己的".to_string(),
         (HoldBack::SystemOwned, Lang::En) => "Belongs to macOS".to_string(),
         (HoldBack::Contains { path, why }, Lang::ZhCn) => format!(
@@ -360,7 +358,10 @@ pub fn describe_refusal(lang: Lang, reason: &str) -> String {
         };
     }
     let (zh, en) = match reason {
-        r if r == REASON_NEEDS_ADMIN => ("需要管理员权限", "Needs an administrator"),
+        r if r == REASON_NEEDS_ADMIN => (
+            "需要管理员权限，Rind 不移动它",
+            "Needs an administrator; Rind never moves it",
+        ),
         r if r == REASON_SYSTEM_OWNED => ("是 macOS 自己的", "Belongs to macOS"),
         r if r == REASON_UNREADABLE => ("读不了，没有权限", "Can't be read, no permission"),
         r if r == REASON_CHANGED => (

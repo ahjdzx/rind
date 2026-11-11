@@ -193,7 +193,7 @@ pub enum HoldBack {
     SharedWith { apps: Vec<AppRef> },
     /// 读不了（无权限）。可以手动选，但移动时可能失败。
     Unreadable,
-    /// root 所有，MVP 不处理。
+    /// 要管理员权限才能移动（root 所有，或父目录写不了 / 带 sticky 位）。Rind 不提权，只列出、不移动。
     NeedsAdmin,
     /// 是 macOS 自己的东西。不能选。
     SystemOwned,

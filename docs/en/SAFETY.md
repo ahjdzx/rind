@@ -81,7 +81,7 @@ between "checking" and "acting". Rind handles it like this:
 
 ## 6. Known limits (the trade-offs, stated up front)
 
-These are not "later"; they are the explicit boundaries of this version:
+These are not "later"; they are deliberate boundaries:
 
 | Limit | Explanation |
 | --- | --- |

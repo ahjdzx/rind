@@ -204,13 +204,15 @@ impl LaunchPage {
                 Some(h) => rind_i18n::describe_hold_back(lang, h),
                 None => ui(lang, Key::LaunchNoLabel).to_string(),
             };
+            // 原因放不下就换行，不截断：这是"为什么不能动它"的唯一说明，被省略号吃掉就没意义了。
             h_flex()
                 .max_w(px(220.))
+                .items_start()
                 .gap_1()
                 .text_xs()
                 .text_color(muted)
-                .child(Icon::new(IconName::Lock).xsmall())
-                .child(div().truncate().child(why))
+                .child(div().pt(px(1.)).child(Icon::new(IconName::Lock).xsmall()))
+                .child(div().flex_1().min_w_0().child(why))
                 .into_any_element()
         };
 

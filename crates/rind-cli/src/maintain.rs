@@ -717,8 +717,8 @@ fn find_launch<'a>(
                 None if first.domain != LaunchDomain::UserAgent => fill(
                     &say(
                         lang,
-                        "它属于「{domain}」，Rind 这一版只管当前用户的启动项",
-                        "it belongs to \"{domain}\"; this version of Rind only manages this user's launch items"
+                        "它属于「{domain}」，Rind 只管当前用户的启动项",
+                        "it belongs to \"{domain}\"; Rind only manages this user's launch items",
                     ),
                     &[("domain", describe_launch_domain(lang, first.domain))],
                 ),

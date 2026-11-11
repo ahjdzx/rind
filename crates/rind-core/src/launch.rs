@@ -512,7 +512,7 @@ fn hold_back_of(
     if apple_label || protect::is_system_owned(env, plist) {
         return Some(HoldBack::SystemOwned);
     }
-    // `/Library` 下的属于 root 或所有用户：MVP 不提权。用户域里别人（多是 root）的 plist 也一样。
+    // `/Library` 下的属于 root 或所有用户：Rind 不提权。用户域里别人（多是 root）的 plist 也一样。
     if domain != LaunchDomain::UserAgent || !owned_by_me(plist) {
         return Some(HoldBack::NeedsAdmin);
     }
