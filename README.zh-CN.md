@@ -1,6 +1,4 @@
-<img align="left" width="96" height="96" hspace="12" vspace="4" src="docs/images/icon-256.png" alt="Rind 应用图标">
-
-# Rind
+![Rind](docs/images/banner-zh.png)
 
 [English](README.md) | **简体中文**
 

@@ -14,6 +14,7 @@ docs/images/ 下：
   带一层柔和投影，放进 Dock 时和系统 App 一样大。`scripts/package-dmg.sh` 用
   sips + iconutil 把它转成 AppIcon.icns。
 - logo.png：不留边、不带投影的方格（256px），界面侧栏和设置页里显示。
+- banner-en.png / banner-zh.png：1280x300 的 README 顶部横幅，Logo + 名字 + 一句话介绍。
 
 用法：python3 scripts/make-brand-images.py
 """
@@ -38,6 +39,7 @@ SS = 4  # 超采样倍率
 SF_ROUNDED = "/System/Library/Fonts/SFNSRounded.ttf"
 SF = "/System/Library/Fonts/SFNS.ttf"
 SF_MONO = "/System/Library/Fonts/SFNSMono.ttf"
+PINGFANG = "/System/Library/Fonts/Hiragino Sans GB.ttc"
 
 
 def font(path: str, size: int, variation: str | None = None) -> ImageFont.FreeTypeFont:
@@ -148,9 +150,36 @@ def main() -> None:
     render_app_icon().save(APP_ICON)
     LOGO.parent.mkdir(parents=True, exist_ok=True)
     render_icon(256).save(LOGO)
-    outputs = [OUT_DIR / n for n in ("icon-256.png", "icon-512.png", "social-preview.png")]
+    render_banner(
+        "Explainable, undoable macOS uninstaller",
+        "Rust \u00b7 GPUI \u00b7 GPL-3.0 \u00b7 macOS 14+",
+        OUT_DIR / "banner-en.png",
+    )
+    render_banner(
+        "\u53ef\u89e3\u91ca\u3001\u53ef\u64a4\u9500\u7684 macOS \u5378\u8f7d\u5de5\u5177",
+        "Rust \u00b7 GPUI \u00b7 GPL-3.0 \u00b7 macOS 14+",
+        OUT_DIR / "banner-zh.png",
+        tagline_font=PINGFANG,
+    )
+    outputs = [OUT_DIR / n for n in ("icon-256.png", "icon-512.png", "social-preview.png", "banner-en.png", "banner-zh.png")]
     for p in outputs + [APP_ICON, LOGO]:
         print(f"{p.relative_to(REPO)}  {p.stat().st_size:,} bytes")
+
+
+def render_banner(tagline: str, subtitle: str, out: pathlib.Path, tagline_font: str = SF) -> None:
+    """README 顶部的横幅：Logo + 名字 + 一句话介绍，深色底 + 柔光。"""
+    w, h = 1280, 300
+    img = radial_glow((w, h), (280, 150), 620, (240, 182, 0), 0.14)
+
+    tile = render_icon(180)
+    img.paste(tile, (64, 60), tile)
+
+    d = ImageDraw.Draw(img)
+    d.text((284, 116), "Rind", font=font(SF, 76, "Bold"), fill=(245, 245, 247), anchor="lm")
+    tagline_f = ImageFont.truetype(tagline_font, 30)
+    d.text((288, 186), tagline, font=tagline_f, fill=(166, 166, 174), anchor="lm")
+    d.text((289, 236), subtitle, font=font(SF_MONO, 20, "Regular"), fill=(117, 117, 125), anchor="lm")
+    img.save(out)
 
 
 if __name__ == "__main__":
